@@ -1,12 +1,8 @@
-from asyncio import Handle
-from multiprocessing import Value
-from typing import Any
 import supabase 
 import requests
-import sys 
 from pipelines.pipeline import artists 
 from datetime import date 
-from backend.app.config import yt_api_key, supabase_url, supabase_secret_key
+from backend.app.config import yt_api_key
 from backend.app.supabase_client import supabase
 from collections import defaultdict
 
@@ -175,10 +171,6 @@ def run_pipeline(supabase, yt_api_key, artists):
         except Exception as e:
              print(f"Non-HTTP Error occured during fetch_channel_information(): {e}")
             
-
-    
-
-
 
 def main():
     yt_failures = run_pipeline(supabase, yt_api_key, artists)
