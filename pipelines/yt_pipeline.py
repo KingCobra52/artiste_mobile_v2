@@ -1,4 +1,3 @@
-import supabase 
 import requests
 from pipelines.pipeline import artists 
 from datetime import date 
@@ -10,12 +9,6 @@ from collections import defaultdict
 #have the http errors in both of the functions where HTTP responses are actually created 
 
 session = requests.Session()
-
-def describe_request_error(exc):
-    response = getattr(exc, "response", None)
-    if response is not None:
-        return f"HTTP {response.status_code}"
-    return type(exc).__name__
 
 def fetch_channel_information(api_key, channel_id=None, handle=None):
     url = "https://www.googleapis.com/youtube/v3/channels"
