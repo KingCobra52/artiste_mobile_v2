@@ -36,3 +36,6 @@ coverage.xml
 
 #enviornment 
 .env 
+
+#agent files 
+.claude.md 
