@@ -3,12 +3,12 @@ from pipelines.pipeline import artists
 from datetime import date 
 from backend.app.config import yt_api_key
 from backend.app.supabase_client import supabase
-from collections import defaultdict
 
 
 #have the http errors in both of the functions where HTTP responses are actually created 
 
 session = requests.Session()
+REQUEST_TIMEOUT_SECONDS = 10
 
 def fetch_channel_information(api_key, channel_id=None, handle=None):
     url = "https://www.googleapis.com/youtube/v3/channels"
@@ -20,7 +20,7 @@ def fetch_channel_information(api_key, channel_id=None, handle=None):
     else:
         raise ValueError("one of channel_id or handle is required")
 
-    response = session.get(url, params=params)
+    response = session.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
     # Surface quota/auth failures as HTTP errors instead of a misleading "not found"
     response.raise_for_status()
     data = response.json()
@@ -59,7 +59,7 @@ def recent_uploads_data(videos_playlist_id, api_key):
         "key": api_key
     }
 
-    response = session.get(url, params=params)
+    response = session.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     data = response.json()
 
@@ -74,44 +74,41 @@ def recent_uploads_data(videos_playlist_id, api_key):
 
 def recent_videos_stats(videos_playlist_id, api_key):
     #this function needs to get the view Counts and like Counts for len(videoIds)
-
     video_ids = recent_uploads_data(videos_playlist_id, api_key)
+    if not video_ids:
+        return {}
 
     url = "https://www.googleapis.com/youtube/v3/videos"
 
-    video_counts = defaultdict(list)
-
-    for i in range(len(video_ids)):
-        video_id = video_ids[i]
-
-        params = {
+    params = {
         "part": "statistics",
-        "id": f"{video_id}",
-        "key": api_key 
-        }
+        "id": ",".join(video_ids),
+        "key": api_key
+    }
 
-        response = session.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
+    response = session.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    data = response.json()
 
-        items = data.get("items", [])
-        if not items:
-            raise ValueError(f"No Video data found for ID: {video_id}")
-        video_stats = items[0]["statistics"]
-        video_views = video_stats.get("viewCount", 0)
-        video_likes = video_stats.get("likeCount", 0)
-        video_comments = video_stats.get("commentCount", 0)
-        video_counts[video_id] = [video_views, video_likes, video_comments]  
+    video_counts = {}
+    for item in data.get("items", []):
+        video_stats = item.get("statistics", {})
+        video_views = int(video_stats.get("viewCount", 0))
+        video_likes = int(video_stats.get("likeCount", 0))
+        video_comments = int(video_stats.get("commentCount", 0))
+        video_counts[item["id"]] = [video_views, video_likes, video_comments]
 
-    return video_counts        
+    return video_counts
 
 
 def run_pipeline(supabase, yt_api_key, artists):
-    failures = 0
     today = date.today()
     for artist in artists:
-        response = supabase.table("artists").select("id, youtube_handle, youtube_channel_id").eq("artist", f"{artist}").execute()
+        response = supabase.table("artists").select("id, youtube_handle, youtube_channel_id").eq("name", f"{artist}").execute()
         rows = response.data 
+        if not rows:
+            print(f"No response data for artist: {artist}")
+            continue 
         artist_id = rows[0]["id"]
         youtube_handle = rows[0]["youtube_handle"]
         youtube_channel_id = rows[0]["youtube_channel_id"]
@@ -126,26 +123,25 @@ def run_pipeline(supabase, yt_api_key, artists):
             response = (
                 supabase.table("youtube_snapshots")
                 .insert({
-                    "artist_id": f"{artist_id}",
-                    "subscribers": f"{subscribers}",
-                    "total_views": f"{total_views}"
+                    "artist_id": artist_id,
+                    "subscribers": subscribers,
+                    "total_views": total_views
                 })
                 .execute()
             )
             print(response.data)
 
             try: 
-                #try-except block for recent uploads data 
                 video_counts = recent_videos_stats(videos_playlist_id, yt_api_key) 
                 for video_id, video_stats in video_counts.items():
                     response = (
                         supabase.table("recent_youtube_video_snapshots")
                         .insert({
-                            "artist_id": f"{artist_id}",
-                            "video_id": f"{video_id}",
-                            "view_count": f"{video_stats[0]}",
-                            "like_count": f"{video_stats[1]}",
-                            "comment_count": f"{video_stats[2]}",
+                            "artist_id": artist_id,
+                            "video_id": video_id,
+                            "view_count": video_stats[0],
+                            "like_count": video_stats[1],
+                            "comment_count": video_stats[2],
                             "date": f"{today}",
                         })
                         .execute())
@@ -166,10 +162,7 @@ def run_pipeline(supabase, yt_api_key, artists):
             
 
 def main():
-    yt_failures = run_pipeline(supabase, yt_api_key, artists)
-
-    print(f"\nYouTube: {len(artists) - yt_failures}/{len(artists)} artists recorded, "  # pyright: ignore[reportOperatorIssue]
-          f"{yt_failures} failed") 
+    run_pipeline(supabase, yt_api_key, artists)
 
 if __name__ == "__main__":
     main()
