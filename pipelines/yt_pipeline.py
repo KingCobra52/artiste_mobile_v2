@@ -101,64 +101,58 @@ def recent_videos_stats(videos_playlist_id, api_key):
     return video_counts
 
 
+def process_artist(supabase, yt_api_key, artist_row, today):
+    artist_id = artist_row["id"]
+    youtube_handle = artist_row["youtube_handle"]
+    youtube_channel_id = artist_row["youtube_channel_id"]
+
+    channel_information = fetch_channel_information(yt_api_key, youtube_channel_id, youtube_handle)
+    subscribers = channel_information["subscriber_count"]
+    total_views = channel_information["view_count"]
+    videos_playlist_id = channel_information["videos_playlist"]
+
+    #insert artist_id, subscribers, total_views into youtube_snapshots
+    response = (
+        supabase.table("youtube_snapshots")
+        .insert({
+            "artist_id": artist_id,
+            "subscribers": subscribers,
+            "total_views": total_views
+        })
+        .execute()
+    )
+    print(response.data)
+
+    video_counts = recent_videos_stats(videos_playlist_id, yt_api_key)
+    for video_id, video_stats in video_counts.items():
+        response = (
+            supabase.table("recent_youtube_video_snapshots")
+            .insert({
+                "artist_id": artist_id,
+                "video_id": video_id,
+                "view_count": video_stats[0],
+                "like_count": video_stats[1],
+                "comment_count": video_stats[2],
+                "date": f"{today}",
+            })
+            .execute())
+        print(response.data)
+
+
 def run_pipeline(supabase, yt_api_key, artists):
     today = date.today()
     for artist in artists:
         response = supabase.table("artists").select("id, youtube_handle, youtube_channel_id").eq("name", f"{artist}").execute()
-        rows = response.data 
+        rows = response.data
         if not rows:
             print(f"No response data for artist: {artist}")
-            continue 
-        artist_id = rows[0]["id"]
-        youtube_handle = rows[0]["youtube_handle"]
-        youtube_channel_id = rows[0]["youtube_channel_id"]
-
+            continue
         try:
-            channel_information = fetch_channel_information(yt_api_key, youtube_channel_id, youtube_handle)
-            subscribers = channel_information["subscriber_count"]
-            total_views = channel_information["view_count"]
-            videos_playlist_id = channel_information["videos_playlist"]
-
-            #insert artist_id, subscribers, total_views into youtube_snapshots 
-            response = (
-                supabase.table("youtube_snapshots")
-                .insert({
-                    "artist_id": artist_id,
-                    "subscribers": subscribers,
-                    "total_views": total_views
-                })
-                .execute()
-            )
-            print(response.data)
-
-            try: 
-                video_counts = recent_videos_stats(videos_playlist_id, yt_api_key) 
-                for video_id, video_stats in video_counts.items():
-                    response = (
-                        supabase.table("recent_youtube_video_snapshots")
-                        .insert({
-                            "artist_id": artist_id,
-                            "video_id": video_id,
-                            "view_count": video_stats[0],
-                            "like_count": video_stats[1],
-                            "comment_count": video_stats[2],
-                            "date": f"{today}",
-                        })
-                        .execute())
-                    print(response.data)
-
-
-            except requests.exceptions.HTTPError as e:
-                print(f"HTTP Error occured during recent_videos_stats(): {e}")
-
-            except Exception as e:
-                print(f"Non-HTTP Error occured during recent_videos_stats(): {e}")
-
+            process_artist(supabase, yt_api_key, rows[0], today)
         except requests.exceptions.HTTPError as e:
-            print(f"HTTP Error occured during fetch_channel_information(): {e}")
-        
+            print(f"HTTP Error occured for {artist}: {e}")
         except Exception as e:
-             print(f"Non-HTTP Error occured during fetch_channel_information(): {e}")
+            print(f"Non-HTTP Error occured for {artist}: {e}")
             
 
 def main():
