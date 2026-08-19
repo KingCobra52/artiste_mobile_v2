@@ -1,12 +1,17 @@
-#from track_pipelines.py - artiste_old 
-#need the track_key method -> make sure all the track keys -> due to schema changes can't add songs with the same track key into db -> need to decide which one to add in this file
-from backend.app.config import supabase_url, supabase_secret_key, lastfm_api_key
-from pipelines.pipeline import artists
-from backend.app.supabase_client import supabase
+#from track_pipelines.py - artiste_old
+#needs the track_key method. A schema change added a unique index on
+#(artist_id, track_key, date). Two songs with the same key can no longer both go
+#in. dedupe_by_key picks which one to keep.
+import re
 import unicodedata
-import requests 
-from datetime import date 
-import re 
+from datetime import date
+
+import requests
+
+from backend.app.config import lastfm_api_key
+from backend.app.supabase_client import supabase
+from pipelines.http_errors import describe_request_error
+from pipelines.artists import artists
 
 today = date.today()
 
@@ -15,7 +20,7 @@ session = requests.Session()
 
 URL = "http://ws.audioscrobbler.com/2.0/"
 
-#takes the top 10 tracks per artists 
+#takes the top 10 tracks per artists
 TOP_N = 10
 
 _FEATURE = re.compile(
@@ -68,7 +73,51 @@ def track_key(name):
     return text or _SPACE.sub(" ", name).strip().lower()
 
 
-TRACK_INSERT = ""
+def dedupe_by_key(tracks, artist=None):
+    """
+    Keep one track per track_key. Better rank wins.
+
+    The table has a unique index on (artist_id, track_key, date). So two tracks
+    with the same key cannot both go in. This happens daily for GloRilla, Ice
+    Spice and Zeddy Will:
+
+        "WHATCHU KNO ABOUT ME (feat. Sexyy Red)"  rank 4
+        "WHATCHU KNO ABOUT ME (with Sexyy Red)"   rank 6   -> same key, dropped
+
+    tracks comes in sorted by rank. So the first key we see is its best rank.
+
+    Ranks are not renumbered. A deduped artist keeps a gap: 1,2,3,4,5,7,8,9,10.
+    That matches the history already in the table.
+
+    Dropped listeners are thrown away, not added to the survivor. Same song, so
+    summing would count it twice.
+    """
+    kept = []
+    seen = {}
+
+    for track in tracks:
+        key = track["track_key"]
+
+        # Empty name gives a None key. The unique index ignores NULLs, and
+        # nothing could join on it anyway.
+        if key is None:
+            print(f"Dropped {track['name']!r} (rank {track['rank']}), no usable track key")
+            continue
+
+        first = seen.get(key)
+        if first is not None:
+            # Print it. One key, two names means Last.fm relabelled a track.
+            # That is what the mbid column is for. Silence would hide it.
+            label = f" for {artist}" if artist else ""
+            print(f"Dropped {track['name']!r} (rank {track['rank']}){label}, "
+                  f"duplicate of rank {first['rank']} {first['name']!r}")
+            continue
+
+        seen[key] = track
+        kept.append(track)
+
+    return kept
+
 
 def fetch_top_tracks(lastfm_api_key, artist, limit=TOP_N):
     response = session.get(URL, timeout=30, params={
@@ -113,28 +162,112 @@ def fetch_top_tracks(lastfm_api_key, artist, limit=TOP_N):
     return out
 
 
-def process_artist():
-    #function will call fetch_top_tracks 
-    pass 
+def process_artist(supabase, lastfm_api_key, artist_row, today):
+    """
+    Fetch, dedupe and store one artist's top tracks.
 
-def run_pipeline():
-    #for loop per artist -> will call process_artist after calling fetch_top_tracks  
+    Catches nothing on purpose. run_pipeline owns the loop, so only it can decide
+    whether a failure stops the run. Returning a status here would give the
+    caller two things to check instead of one.
+    """
+    artist_id = artist_row["id"]
+    artist_name = artist_row["name"]
+
+    tracks = fetch_top_tracks(lastfm_api_key, artist_name)
+    tracks = dedupe_by_key(tracks, artist_name)
+
+    # A 200 with no tracks is still a Last.fm problem. Same channel as the rest.
+    if not tracks:
+        raise LastfmError("no top tracks returned")
+
+    rows = [{
+        # Store the raw name, not the key. Keeps renames visible.
+        "artist_id": artist_id,
+        "rank": track["rank"],
+        "track_name": track["name"],
+        "track_key": track["track_key"],
+        "mbid": track["mbid"],
+        "listeners": track["listeners"],
+        "playcount": track["playcount"],
+        # Always set this. The column is nullable with no default, and it is part
+        # of the unique index. A NULL date would switch the constraint off.
+        "date": f"{today}",
+    } for track in tracks]
+
+    # One call for all ten rows, not a loop like yt_pipeline. So an artist's day
+    # lands whole or not at all. ignore_duplicates leaves earlier rows alone but
+    # still fills in any the earlier run missed.
+    response = (
+        supabase.table("lastfm_track_snapshots")
+        .upsert(rows, on_conflict="artist_id,track_key,date", ignore_duplicates=True)
+        .execute()
+    )
+
+    # With ignore_duplicates, response.data holds only the new rows.
+    # So an empty list means a rerun, not a failure.
+    if not response.data:
+        print(f"Today's top tracks already recorded for {artist_name}")
+
+
+def run_pipeline(supabase, lastfm_api_key, artists):
+    """
+    Returns the artists that failed, as {"artist": name, "reason": text} dicts.
+
+    A list rather than a count so the caller can name the artists that need
+    fixing. len() still gives the count for the exit-code rule.
+    """
+    today = date.today()
+    artist_append_failures = []
+
     for artist in artists:
-        #get the response data -> figure out of the artist is in the supabase table 
-        artist_id = supabase.table("artists").select("id").eq("name", f"{artist}").execute()
-        response = supabase.table("lastfm_track_snapshots").select("id").eq("artist_id", f"{artist_id}").execute()
-        rows = response.data
-        if not rows:
-            print(f"No response data for artist: {artist}")
-            continue
+        # Supabase lookup goes inside the try too, so one lookup failure costs a
+        # single artist instead of ending the whole run.
         try:
-            process_artist()
-        except:
-            #refine the exceptions later in the code  
-            pass
+            response = (
+                supabase.table("artists")
+                .select("id, name")
+                .eq("name", f"{artist}")
+                .execute()
+            )
+            rows = response.data
+            if not rows:
+                print(f"No response data for artist: {artist}")
+                artist_append_failures.append(
+                    {"artist": artist, "reason": "no matching row in the artists table"}
+                )
+                continue
+
+            process_artist(supabase, lastfm_api_key, rows[0], today)
+
+        # Last.fm reports unknown artists inside a 200.
+        # So this catches a wrong name in artists.py.
+        except LastfmError as e:
+            reason = f"Last.fm rejected the lookup: {e}"
+            print(f"Last.fm rejected top-track lookup for {artist}: {e}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+        # 403 means bad key. 429 means slow down.
+        # Must come first. It subclasses RequestException.
+        except requests.exceptions.HTTPError as e:
+            reason = f"HTTP error: {describe_request_error(e)}"
+            print(f"HTTP error occured for {artist}: {describe_request_error(e)}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+        # Timeout, ConnectionError, JSONDecodeError. No status code to report.
+        except requests.exceptions.RequestException as e:
+            reason = f"request failed: {describe_request_error(e)}"
+            print(f"Request failed for {artist}: {describe_request_error(e)}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+        # Everything else. One bad artist must not kill the other 23.
+        except Exception as e:
+            reason = f"{type(e).__name__}: {e}"
+            print(f"Non-HTTP error occured for {artist}: {reason}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+
+    return artist_append_failures
+
 
 def main():
-    pass 
+    run_pipeline(supabase, lastfm_api_key, artists)
+
 
 if __name__ == "__main__":
     main()

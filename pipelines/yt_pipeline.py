@@ -1,6 +1,7 @@
 import requests
-from pipelines.pipeline import artists 
-from datetime import date 
+from pipelines.artists import artists
+from pipelines.http_errors import describe_request_error
+from datetime import date
 from backend.app.config import yt_api_key
 from backend.app.supabase_client import supabase
 
@@ -140,20 +141,54 @@ def process_artist(supabase, yt_api_key, artist_row, today):
 
 
 def run_pipeline(supabase, yt_api_key, artists):
+    """
+    Returns the artists that failed, as {"artist": name, "reason": text} dicts.
+
+    A list rather than a count so the caller can name the artists that need
+    fixing. len() still gives the count for the exit-code rule.
+    """
     today = date.today()
+    artist_append_failures = []
+
     for artist in artists:
-        response = supabase.table("artists").select("id, youtube_handle, youtube_channel_id").eq("name", f"{artist}").execute()
-        rows = response.data
-        if not rows:
-            print(f"No response data for artist: {artist}")
-            continue
+        # The Supabase lookup sits inside the try as well, so one lookup failure
+        # costs a single artist instead of ending the whole run.
         try:
+            response = (
+                supabase.table("artists")
+                .select("id, youtube_handle, youtube_channel_id")
+                .eq("name", f"{artist}")
+                .execute()
+            )
+            rows = response.data
+            if not rows:
+                print(f"No response data for artist: {artist}")
+                artist_append_failures.append(
+                    {"artist": artist, "reason": "no matching row in the artists table"}
+                )
+                continue
+
             process_artist(supabase, yt_api_key, rows[0], today)
+        # 403 means bad key. 429 means quota gone.
+        # Must come first. It subclasses RequestException.
         except requests.exceptions.HTTPError as e:
-            print(f"HTTP Error occured for {artist}: {e}")
+            reason = f"HTTP error: {describe_request_error(e)}"
+            print(f"HTTP error occured for {artist}: {describe_request_error(e)}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+        # Timeout, ConnectionError, JSONDecodeError.
+        # These carry the URL too.
+        except requests.exceptions.RequestException as e:
+            reason = f"request failed: {describe_request_error(e)}"
+            print(f"Request failed for {artist}: {describe_request_error(e)}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+        # Everything else. Supabase errors land here. No key in those.
         except Exception as e:
-            print(f"Non-HTTP Error occured for {artist}: {e}")
-            
+            reason = f"{type(e).__name__}: {e}"
+            print(f"Non-HTTP error occured for {artist}: {reason}")
+            artist_append_failures.append({"artist": artist, "reason": reason})
+
+    return artist_append_failures
+
 
 def main():
     run_pipeline(supabase, yt_api_key, artists)
