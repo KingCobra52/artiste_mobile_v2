@@ -8,7 +8,6 @@ in artists.py should not turn the run red every night until it is fixed.
 """
 
 import sys
-import requests 
 from datetime import date
 from pipelines.http_errors import describe_request_error
 
@@ -16,6 +15,7 @@ from backend.app.config import lastfm_api_key, yt_api_key
 from backend.app.supabase_client import supabase
 from pipelines import last_fm_pipeline, yt_pipeline
 from pipelines.artists import artists
+from requests.exceptions import RequestException
 
 # YouTube goes first. It is the one with a daily quota, so an exhausted quota
 # shows up before any time is spent on Last.fm.
@@ -39,10 +39,12 @@ def run_all(supabase, artists):
         try:
             failures = run_pipeline(supabase, api_key, artists)
             results.append((name, failures, False))
-        except requests.exceptions.RequestException as e:
+        except RequestException as e:
             print(f"{name} pipeline crashed: {describe_request_error(e)}")
+            results.append((name, [], True))
         except Exception as e:
             print(f"{name} pipeline crashed: {type(e).__name__}: {e}")
+            results.append((name, [], True))
 
     return results
 

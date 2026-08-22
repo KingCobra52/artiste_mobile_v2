@@ -12,6 +12,7 @@ from backend.app.config import lastfm_api_key
 from backend.app.supabase_client import supabase
 from pipelines.http_errors import describe_request_error
 from pipelines.artists import artists
+from requests.exceptions import HTTPError, RequestException
 
 today = date.today()
 
@@ -247,12 +248,12 @@ def run_pipeline(supabase, lastfm_api_key, artists):
             artist_append_failures.append({"artist": artist, "reason": reason})
         # 403 means bad key. 429 means slow down.
         # Must come first. It subclasses RequestException.
-        except requests.exceptions.HTTPError as e:
+        except HTTPError as e:
             reason = f"HTTP error: {describe_request_error(e)}"
             print(f"HTTP error occured for {artist}: {describe_request_error(e)}")
             artist_append_failures.append({"artist": artist, "reason": reason})
         # Timeout, ConnectionError, JSONDecodeError. No status code to report.
-        except requests.exceptions.RequestException as e:
+        except RequestException as e:
             reason = f"request failed: {describe_request_error(e)}"
             print(f"Request failed for {artist}: {describe_request_error(e)}")
             artist_append_failures.append({"artist": artist, "reason": reason})

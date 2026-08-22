@@ -4,6 +4,7 @@ from pipelines.http_errors import describe_request_error
 from datetime import date
 from backend.app.config import yt_api_key
 from backend.app.supabase_client import supabase
+from requests.exceptions import HTTPError, RequestException
 
 
 #have the http errors in both of the functions where HTTP responses are actually created 
@@ -171,13 +172,14 @@ def run_pipeline(supabase, yt_api_key, artists):
             process_artist(supabase, yt_api_key, rows[0], today)
         # 403 means bad key. 429 means quota gone.
         # Must come first. It subclasses RequestException.
-        except requests.exceptions.HTTPError as e:
+        #Server rejected request
+        except HTTPError as e:
             reason = f"HTTP error: {describe_request_error(e)}"
             print(f"HTTP error occured for {artist}: {describe_request_error(e)}")
             artist_append_failures.append({"artist": artist, "reason": reason})
         # Timeout, ConnectionError, JSONDecodeError.
         # These carry the URL too.
-        except requests.exceptions.RequestException as e:
+        except RequestException as e:
             reason = f"request failed: {describe_request_error(e)}"
             print(f"Request failed for {artist}: {describe_request_error(e)}")
             artist_append_failures.append({"artist": artist, "reason": reason})
