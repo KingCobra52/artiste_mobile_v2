@@ -260,12 +260,12 @@ ARTIST_ROW = {"id": 7, "youtube_handle": "testartist", "youtube_channel_id": "UC
 
 def mock_supabase():
     supabase = MagicMock()
-    supabase.table.return_value.insert.return_value.execute.return_value.data = [{"id": 1}]
+    supabase.table.return_value.upsert.return_value.execute.return_value.data = [{"id": 1}]
     return supabase
 
 
 @responses.activate
-def test_process_artist_inserts_snapshot_and_video_rows():
+def test_process_artist_upserts_snapshot_and_video_rows():
     responses.add(responses.GET, CHANNELS_URL, json=CHANNEL_PAYLOAD, status=200)
     responses.add(
         responses.GET,
@@ -287,23 +287,32 @@ def test_process_artist_inserts_snapshot_and_video_rows():
     table_calls = [call.args[0] for call in supabase.table.call_args_list]
     assert table_calls == ["youtube_snapshots", "recent_youtube_video_snapshots"]
 
-    insert_calls = supabase.table.return_value.insert.call_args_list
-    snapshot_payload = insert_calls[0].args[0]
-    assert snapshot_payload == {"artist_id": 7, "subscribers": 1000, "total_views": 50000}
+    upsert_calls = supabase.table.return_value.upsert.call_args_list
 
-    video_payload = insert_calls[1].args[0]
-    assert video_payload == {
+    # The date has to be in the payload. It is half the unique index, so a NULL
+    # date would let a second run write a duplicate row.
+    assert upsert_calls[0].args[0] == {
+        "artist_id": 7,
+        "subscribers": 1000,
+        "total_views": 50000,
+        "date": "2026-08-31",
+    }
+    assert upsert_calls[0].kwargs["on_conflict"] == "artist_id,date"
+
+    # One call carrying a list, not a call per video.
+    assert upsert_calls[1].args[0] == [{
         "artist_id": 7,
         "video_id": "vid1",
         "view_count": 5,
         "like_count": 1,
         "comment_count": 0,
         "date": "2026-08-31",
-    }
+    }]
+    assert upsert_calls[1].kwargs["on_conflict"] == "artist_id,video_id,date"
 
 
 @responses.activate
-def test_process_artist_no_recent_videos_only_inserts_snapshot():
+def test_process_artist_no_recent_videos_only_upserts_snapshot():
     responses.add(responses.GET, CHANNELS_URL, json=CHANNEL_PAYLOAD, status=200)
     responses.add(responses.GET, PLAYLIST_ITEMS_URL, json={"items": []}, status=200)
     supabase = mock_supabase()
@@ -315,7 +324,7 @@ def test_process_artist_no_recent_videos_only_inserts_snapshot():
 
 
 @responses.activate
-def test_process_artist_hidden_subscriber_count_inserted_as_none():
+def test_process_artist_hidden_subscriber_count_upserted_as_none():
     payload = {
         "items": [
             {
@@ -337,7 +346,7 @@ def test_process_artist_hidden_subscriber_count_inserted_as_none():
 
     yt_pipeline.process_artist(supabase, "fake-key", ARTIST_ROW, date(2026, 8, 31))
 
-    snapshot_payload = supabase.table.return_value.insert.call_args_list[0].args[0]
+    snapshot_payload = supabase.table.return_value.upsert.call_args_list[0].args[0]
     assert snapshot_payload["subscribers"] is None
 
 

@@ -113,32 +113,44 @@ def process_artist(supabase, yt_api_key, artist_row, today):
     total_views = channel_information["view_count"]
     videos_playlist_id = channel_information["videos_playlist"]
 
-    #insert artist_id, subscribers, total_views into youtube_snapshots
-    response = (
+    # Upsert, not insert, so a second run on the same day overwrites instead of
+    # writing a duplicate row. The job runs a few times a day on purpose, and a
+    # duplicate date would break the per-day deltas built on top of this table.
+    #
+    # Always set the date. The unique index is on (artist_id, date), so a NULL
+    # date would switch the constraint off and let duplicates back in.
+    (
         supabase.table("youtube_snapshots")
-        .insert({
+        .upsert({
             "artist_id": artist_id,
             "subscribers": subscribers,
-            "total_views": total_views
-        })
+            "total_views": total_views,
+            "date": f"{today}",
+        }, on_conflict="artist_id,date")
         .execute()
     )
-    print(response.data)
 
+    # No ignore_duplicates here, unlike last_fm_pipeline. These are running
+    # counters, so a later run in the same day is the better reading and should
+    # win. Last.fm stores a daily ranking, where the first reading is the one to keep.
     video_counts = recent_videos_stats(videos_playlist_id, yt_api_key)
-    for video_id, video_stats in video_counts.items():
-        response = (
+    rows = [{
+        "artist_id": artist_id,
+        "video_id": video_id,
+        "view_count": video_stats[0],
+        "like_count": video_stats[1],
+        "comment_count": video_stats[2],
+        "date": f"{today}",
+    } for video_id, video_stats in video_counts.items()]
+
+    # One call for all the videos, not a call each. That was up to 50 round trips
+    # per artist. It also means an artist's videos land whole or not at all.
+    if rows:
+        (
             supabase.table("recent_youtube_video_snapshots")
-            .insert({
-                "artist_id": artist_id,
-                "video_id": video_id,
-                "view_count": video_stats[0],
-                "like_count": video_stats[1],
-                "comment_count": video_stats[2],
-                "date": f"{today}",
-            })
-            .execute())
-        print(response.data)
+            .upsert(rows, on_conflict="artist_id,video_id,date")
+            .execute()
+        )
 
 
 def run_pipeline(supabase, yt_api_key, artists):

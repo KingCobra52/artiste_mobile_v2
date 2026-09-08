@@ -1,0 +1,36 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # backend/app/supabase_client.py calls create_client() at import time, so
+    # even collecting the tests needs these set. Dummy values are enough since
+    # create_client does not touch the network - and this repo is public, so a
+    # PR-triggered job must never see the real keys.
+    env:
+      SUPABASE_URL: https://example.supabase.co
+      SUPABASE_SECRET_KEY: dummy-key-for-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - run: ruff check .
+
+      # `python -m`, not bare `pytest`. There is no conftest.py, no __init__.py
+      # and no pythonpath setting, so imports only resolve with the repo root
+      # on sys.path.
+      - run: python -m pytest
