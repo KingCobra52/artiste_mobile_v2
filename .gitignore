@@ -39,3 +39,8 @@ coverage.xml
 
 #agent files 
 CLAUDE.md
+
+#miscillaneous 
+node_modules/
+.env
+.env.local
