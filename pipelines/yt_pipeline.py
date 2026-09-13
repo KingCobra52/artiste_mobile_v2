@@ -1,13 +1,14 @@
-import requests
-from pipelines.artists import artists
-from pipelines.http_errors import describe_request_error
 from datetime import date
-from backend.app.config import yt_api_key
-from backend.app.supabase_client import supabase
+
+import requests
 from requests.exceptions import HTTPError, RequestException
 
+from backend.app.config import yt_api_key
+from backend.app.supabase_client import supabase
+from pipelines.artists import artists
+from pipelines.http_errors import describe_request_error
 
-#have the http errors in both of the functions where HTTP responses are actually created 
+#have the http errors in both of the functions where HTTP responses are actually created
 
 session = requests.Session()
 REQUEST_TIMEOUT_SECONDS = 10

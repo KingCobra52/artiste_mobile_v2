@@ -9,13 +9,14 @@ in artists.py should not turn the run red every night until it is fixed.
 
 import sys
 from datetime import date
-from pipelines.http_errors import describe_request_error
+
+from requests.exceptions import RequestException
 
 from backend.app.config import lastfm_api_key, yt_api_key
 from backend.app.supabase_client import supabase
 from pipelines import last_fm_pipeline, yt_pipeline
 from pipelines.artists import artists
-from requests.exceptions import RequestException
+from pipelines.http_errors import describe_request_error
 
 # YouTube goes first. It is the one with a daily quota, so an exhausted quota
 # shows up before any time is spent on Last.fm.

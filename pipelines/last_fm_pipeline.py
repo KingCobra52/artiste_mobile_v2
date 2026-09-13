@@ -7,12 +7,12 @@ import unicodedata
 from datetime import date
 
 import requests
+from requests.exceptions import HTTPError, RequestException
 
 from backend.app.config import lastfm_api_key
 from backend.app.supabase_client import supabase
-from pipelines.http_errors import describe_request_error
 from pipelines.artists import artists
-from requests.exceptions import HTTPError, RequestException
+from pipelines.http_errors import describe_request_error
 
 today = date.today()
 

@@ -1,11 +1,16 @@
 from datetime import date
 from unittest.mock import MagicMock, Mock
 
-from pipelines.yt_pipeline import fetch_channel_information, recent_uploads_data, recent_videos_stats
-import pipelines.yt_pipeline as yt_pipeline
-import responses
-import requests
 import pytest
+import requests
+import responses
+
+import pipelines.yt_pipeline as yt_pipeline
+from pipelines.yt_pipeline import (
+    fetch_channel_information,
+    recent_uploads_data,
+    recent_videos_stats,
+)
 
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
@@ -276,7 +281,9 @@ def test_process_artist_upserts_snapshot_and_video_rows():
     responses.add(
         responses.GET,
         VIDEOS_URL,
-        json=videos_stats_payload({"vid1": {"viewCount": "5", "likeCount": "1", "commentCount": "0"}}),
+        json=videos_stats_payload(
+            {"vid1": {"viewCount": "5", "likeCount": "1", "commentCount": "0"}}
+        ),
         status=200,
     )
     supabase = mock_supabase()

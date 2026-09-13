@@ -5,8 +5,8 @@ import pytest
 import requests
 import responses
 
-from pipelines.last_fm_pipeline import LastfmError, dedupe_by_key, fetch_top_tracks, track_key
 import pipelines.last_fm_pipeline as last_fm_pipeline
+from pipelines.last_fm_pipeline import LastfmError, dedupe_by_key, fetch_top_tracks, track_key
 
 LASTFM_URL = "http://ws.audioscrobbler.com/2.0/"
 

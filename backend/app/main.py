@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import trading, holdings 
+from routers import holdings, trading
 
 app = FastAPI()
 

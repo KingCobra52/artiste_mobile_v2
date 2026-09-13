@@ -1,8 +1,10 @@
-import os 
+import os
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-#load enviornment variables as necessary 
+#load enviornment variables as necessary
 
 database_url = str(os.getenv("DATABASE_URL"))
 supabase_url = str(os.getenv("SUPABASE_URL"))
