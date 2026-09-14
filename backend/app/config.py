@@ -1,14 +1,11 @@
-import os
+"""Compatibility exports for the existing ingestion pipelines."""
 
-from dotenv import load_dotenv
+from backend.app.core.config import get_settings
 
-load_dotenv()
+_settings = get_settings()
 
-#load enviornment variables as necessary
-
-database_url = str(os.getenv("DATABASE_URL"))
-supabase_url = str(os.getenv("SUPABASE_URL"))
-supabase_secret_key = str(os.getenv("SUPABASE_SECRET_KEY"))
-lastfm_api_key = os.getenv("LASTFM_API_KEY")
-yt_api_key = os.getenv("YOUTUBE_API_KEY")
-
+database_url = _settings.database_url
+supabase_url = str(_settings.supabase_url).rstrip("/")
+supabase_secret_key = _settings.supabase_secret_key
+lastfm_api_key = _settings.lastfm_api_key
+yt_api_key = _settings.youtube_api_key
