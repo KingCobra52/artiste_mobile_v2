@@ -39,6 +39,16 @@ async def test_verify_access_token_returns_typed_user():
 
 
 @pytest.mark.anyio
+async def test_verify_access_token_accepts_sdk_claims_dictionary():
+    user_id = UUID("12345678-1234-5678-1234-567812345678")
+    client = FakeClient(FakeAuth({"claims": {"sub": str(user_id)}}))
+
+    user = await verify_access_token(client, "valid-token")
+
+    assert user.id == user_id
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize(
     "result,error",
     [

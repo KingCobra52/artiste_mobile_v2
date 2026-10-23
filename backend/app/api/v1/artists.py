@@ -2,7 +2,7 @@ from fastapi import APIRouter, Path
 
 from backend.app.api.dependencies import MarketServiceDep
 from backend.app.schemas.artist import Artist
-from backend.app.schemas.error import NOT_IMPLEMENTED_RESPONSE
+from backend.app.schemas.error import MARKET_RESPONSES
 
 router = APIRouter(prefix="/artists", tags=["artists"])
 
@@ -10,7 +10,7 @@ router = APIRouter(prefix="/artists", tags=["artists"])
 @router.get(
     "",
     response_model=list[Artist],
-    responses=NOT_IMPLEMENTED_RESPONSE,
+    responses=MARKET_RESPONSES,
     summary="List artists",
 )
 async def list_artists(service: MarketServiceDep) -> list[Artist]:
@@ -20,7 +20,7 @@ async def list_artists(service: MarketServiceDep) -> list[Artist]:
 @router.get(
     "/{artist_id}",
     response_model=Artist,
-    responses=NOT_IMPLEMENTED_RESPONSE,
+    responses=MARKET_RESPONSES,
     summary="Get an artist",
 )
 async def get_artist(

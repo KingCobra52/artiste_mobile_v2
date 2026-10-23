@@ -29,10 +29,10 @@ export function ErrorState({ title, message }: { title: string; message: string 
   );
 }
 
-export function StaleDataNotice({ date }: { date: string | null }) {
+export function StaleDataNotice({ date, status = "stale" }: { date: string | null; status?: "stale" | "unavailable" }) {
   return (
     <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
-      This quote is stale{date ? ` (last updated ${date})` : ""}. Trading is disabled.
+      {status === "unavailable" ? "No usable quote is available" : "This quote is stale"}{date ? ` (last updated ${date})` : ""}. Trading is disabled.
     </p>
   );
 }

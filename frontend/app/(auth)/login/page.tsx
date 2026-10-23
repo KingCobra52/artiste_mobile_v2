@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { ConfigurationNotice } from "@/components/ui/configuration-notice";
 import { getSupabaseConfig } from "@/lib/supabase/config";
@@ -23,11 +24,15 @@ export default async function LoginPage({
     <main className="grid min-h-dvh place-items-center px-5 py-12">
       <section className="w-full max-w-md rounded-3xl border border-white/8 bg-slate-900 p-6 shadow-2xl shadow-black/30 sm:p-8">
         <div className="mb-8 grid size-14 place-items-center rounded-2xl bg-lime-300 text-xl font-black text-slate-950">A</div>
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-200">Invite-only beta</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-200">Paper trading</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">Welcome back</h1>
-        <p className="mt-3 leading-7 text-slate-400">Sign in with the email and password from your invitation.</p>
+        <p className="mt-3 leading-7 text-slate-400">Sign in to your artist portfolio.</p>
         {params.error === "callback" && <p role="alert" className="mt-4 text-sm text-rose-300">We could not finish signing you in. Try again.</p>}
         <LoginForm nextPath={safeNextPath(params.next)} />
+        <p className="mt-6 text-center text-sm text-slate-400">
+          New to Artiste? <Link className="font-semibold text-lime-200 hover:text-lime-100" href="/signup">Create an account</Link>
+        </p>
+        <p className="mt-5 text-center text-xs leading-5 text-slate-500">All prices and trades are simulated. Nothing here represents real ownership or moves real money.</p>
       </section>
     </main>
   );

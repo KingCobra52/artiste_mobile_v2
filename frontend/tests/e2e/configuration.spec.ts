@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/", "/login", "/market"]) {
+for (const path of ["/", "/login", "/signup", "/market"]) {
   test(`missing configuration is explained at ${path}`, async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "Connect Supabase to continue" })).toBeVisible();

@@ -23,17 +23,17 @@ export interface TradeDraft {
 }
 
 export type TradeResult =
-  | { ok: true; code: "accepted"; message: string }
   | {
-      ok: false;
-      code:
-        | "not_connected"
-        | "unauthenticated"
-        | "configuration_error"
-        | "validation_error";
+      ok: true;
+      code: "accepted";
       message: string;
-      fieldErrors?: Partial<Record<keyof TradeDraft, string>>;
-    };
+      tradeId: number;
+      executionPriceCents: number;
+      totalCents: number;
+      cashCents: number;
+      idempotent: boolean;
+    }
+  | { ok: false; code: string; message: string };
 
 export interface Holding {
   artist: Artist;
@@ -45,11 +45,27 @@ export interface Holding {
 
 export interface PortfolioSummary {
   cashCents: number;
-  holdingsValueCents: number;
-  totalValueCents: number;
-  gainLossCents: number;
+  holdingsValueCents: number | null;
+  totalValueCents: number | null;
+  gainLossCents: number | null;
   asOf: ISODateString;
   status: "fresh" | "stale";
+}
+
+export interface TradeHistoryItem {
+  id: number;
+  artist: Artist;
+  side: "buy" | "sell";
+  quantity: number;
+  executionPriceCents: number;
+  totalCents: number;
+  executedAt: ISODateString;
+}
+
+export interface Portfolio {
+  summary: PortfolioSummary;
+  holdings: Holding[];
+  trades: TradeHistoryItem[];
 }
 
 export interface PortfolioSeriesPoint {

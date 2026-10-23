@@ -5,7 +5,7 @@ import type { Holding } from "@/types";
 
 export function HoldingsList({ holdings }: { holdings: Holding[] }) {
   if (holdings.length === 0) {
-    return <EmptyState title="No holdings yet">Browse the Market to find your first artist.</EmptyState>;
+    return <EmptyState title="No holdings yet"><span>Start building a collection of artists you believe in.</span><Link href="/market" className="mx-auto mt-5 flex min-h-11 w-fit items-center rounded-xl action-primary px-5 font-semibold">Explore the Market →</Link></EmptyState>;
   }
 
   return (
