@@ -30,19 +30,33 @@ async def get_current_user(
     return await verify_access_token(client, credentials.credentials)
 
 
-def get_market_service() -> MarketService:
-    return MarketService()
-
-
-def get_portfolio_service() -> PortfolioService:
-    return PortfolioService()
-
-
-def get_trading_service() -> TradingService:
-    return TradingService()
-
-
 SupabaseDep = Annotated[AsyncClient, Depends(get_supabase)]
+
+
+def get_market_service(client: SupabaseDep) -> MarketService:
+    from backend.app.repositories.artists import SupabaseArtistsRepository
+    from backend.app.repositories.snapshots import SupabaseSnapshotsRepository
+
+    return MarketService(
+        artists=SupabaseArtistsRepository(client),
+        snapshots=SupabaseSnapshotsRepository(client),
+    )
+
+
+def get_portfolio_service(client: SupabaseDep) -> PortfolioService:
+    from backend.app.repositories.portfolios import SupabasePortfoliosRepository
+
+    market = get_market_service(client)
+    return PortfolioService(SupabasePortfoliosRepository(client), market)
+
+
+def get_trading_service(client: SupabaseDep) -> TradingService:
+    from backend.app.repositories.portfolios import SupabasePortfoliosRepository
+
+    market = get_market_service(client)
+    return TradingService(SupabasePortfoliosRepository(client), market)
+
+
 CurrentUserDep = Annotated[CurrentUser, Depends(get_current_user)]
 MarketServiceDep = Annotated[MarketService, Depends(get_market_service)]
 PortfolioServiceDep = Annotated[PortfolioService, Depends(get_portfolio_service)]

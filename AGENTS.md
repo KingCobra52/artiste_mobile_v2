@@ -227,3 +227,7 @@ unavailable values in product code.
 - Use plain language and short sentences in comments, docstrings, plans,
   commits, pull requests, and replies.
 - Do not add Codex or Anthropic attribution to commits or pull requests.
+
+## Commit workflow
+
+- Make a Git commit after adding tests, adding or removing a feature, or completing a major change. Do not push unless requested.

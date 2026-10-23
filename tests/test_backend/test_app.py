@@ -6,6 +6,8 @@ from backend.app.api.dependencies import get_current_user
 from backend.app.core.auth import CurrentUser
 from backend.app.core.config import Settings
 from backend.app.main import create_app
+from backend.app.schemas.market import MarketQuote
+from backend.app.schemas.portfolio import Portfolio, PortfolioStatus, PortfolioSummary
 
 
 class FakeAuth:
@@ -44,14 +46,22 @@ def test_health_and_openapi(monkeypatch):
     assert "/api/v1/trades" in schema["paths"]
 
 
-def test_public_domain_route_returns_standard_not_implemented(monkeypatch):
+def test_public_market_returns_quote_data(monkeypatch):
     app = make_app(monkeypatch)
+
+    class Market:
+        async def list_quotes(self):
+            return [MarketQuote(artist_id="1", price_cents=1000, status="fresh")]
+
+    from backend.app.api.dependencies import get_market_service
+
+    app.dependency_overrides[get_market_service] = lambda: Market()
     with TestClient(app) as client:
         response = client.get("/api/v1/market")
 
-    assert response.status_code == 501
-    assert response.json()["code"] == "domain_not_implemented"
-    assert response.json()["request_id"] == response.headers["x-request-id"]
+    assert response.status_code == 200
+    assert response.json()[0]["artistId"] == "1"
+    assert response.json()[0]["priceCents"] == 1000
 
 
 def test_protected_route_requires_bearer_token(monkeypatch):
@@ -63,18 +73,37 @@ def test_protected_route_requires_bearer_token(monkeypatch):
     assert response.json()["code"] == "unauthenticated"
 
 
-def test_authenticated_route_reaches_service_placeholder(monkeypatch):
+def test_authenticated_portfolio_returns_owner_data(monkeypatch):
     app = make_app(monkeypatch)
 
     async def current_user():
         return CurrentUser(id=UUID("12345678-1234-5678-1234-567812345678"))
 
     app.dependency_overrides[get_current_user] = current_user
+    from backend.app.api.dependencies import get_portfolio_service
+
+    class Portfolios:
+        async def get_portfolio(self, user_id):
+            assert user_id == UUID("12345678-1234-5678-1234-567812345678")
+            return Portfolio(
+                summary=PortfolioSummary(
+                    cash_cents=1_000_000,
+                    holdings_value_cents=0,
+                    total_value_cents=1_000_000,
+                    gain_loss_cents=0,
+                    as_of="2026-10-23T00:00:00Z",
+                    status=PortfolioStatus.FRESH,
+                ),
+                holdings=[],
+                trades=[],
+            )
+
+    app.dependency_overrides[get_portfolio_service] = lambda: Portfolios()
     with TestClient(app) as client:
         response = client.get("/api/v1/portfolio")
 
-    assert response.status_code == 501
-    assert response.json()["code"] == "domain_not_implemented"
+    assert response.status_code == 200
+    assert response.json()["summary"]["cashCents"] == 1_000_000
 
 
 def test_trade_validation_uses_standard_error_shape(monkeypatch):

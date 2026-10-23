@@ -17,6 +17,7 @@ from backend.app.supabase_client import supabase
 from pipelines import last_fm_pipeline, yt_pipeline
 from pipelines.artists import artists
 from pipelines.http_errors import describe_request_error
+from pipelines.portfolio_snapshots import record_portfolio_valuations
 
 # YouTube goes first. It is the one with a daily quota, so an exhausted quota
 # shows up before any time is spent on Last.fm.
@@ -76,6 +77,16 @@ def main():
     total = len(artists)
     results = run_all(supabase, artists)
     print_summary(results, total)
+
+    if total and any(
+        not crashed and len(failures) < total for _, failures, crashed in results
+    ):
+        try:
+            recorded = record_portfolio_valuations(supabase)
+            print(f"Recorded {recorded} changed portfolio valuations after market refresh.")
+        except Exception as exc:
+            print(f"Portfolio valuation snapshot failed: {type(exc).__name__}: {exc}")
+            sys.exit(1)
 
     # Non-zero for a crash, or for a pipeline that failed every artist. Those are
     # the systemic cases: a dead key, an exhausted quota, Supabase unreachable.

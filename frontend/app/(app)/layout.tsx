@@ -17,7 +17,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <div className="min-h-dvh">
       <AppHeader />
-      <main className="mx-auto w-full max-w-3xl px-5 pb-28 pt-7">{children}</main>
+      <main className="mx-auto w-full max-w-5xl px-5 sm:px-8 pb-32 pt-8">{children}</main>
       <BottomNavigation />
     </div>
   );

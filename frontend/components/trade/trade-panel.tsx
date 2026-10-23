@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitTrade } from "@/actions/trades";
 import { formatMoney } from "@/lib/format";
 import type { Artist, MarketQuote, TradeDraft, TradeResult } from "@/types";
@@ -14,19 +15,20 @@ export function TradePanel({
   currentQuote: MarketQuote;
   availablePosition: number;
 }) {
+  const router = useRouter();
   const [side, setSide] = useState<TradeDraft["side"]>("buy");
   const [quantityText, setQuantityText] = useState("1");
   const [result, setResult] = useState<TradeResult | null>(null);
   const [pending, startTransition] = useTransition();
   const quantity = Number(quantityText);
   const tradable = currentQuote.status === "fresh" && currentQuote.priceCents !== null;
-  const quantityError = !Number.isSafeInteger(quantity) || quantity <= 0
+  const quantityError = !Number.isSafeInteger(quantity) || quantity <= 0 || quantity > 1_000_000
     ? "Enter a positive whole number of shares."
     : side === "sell" && quantity > availablePosition
       ? `You have ${availablePosition} shares available.`
       : null;
   const estimate = useMemo(
-    () => currentQuote.priceCents !== null && Number.isSafeInteger(quantity) && quantity > 0
+    () => currentQuote.priceCents !== null && Number.isSafeInteger(quantity) && quantity > 0 && quantity <= 1_000_000
       ? currentQuote.priceCents * quantity
       : null,
     [currentQuote.priceCents, quantity],
@@ -44,11 +46,15 @@ export function TradePanel({
       requestId: crypto.randomUUID(),
     };
 
-    startTransition(async () => setResult(await submitTrade(draft)));
+    startTransition(async () => {
+      const response = await submitTrade(draft);
+      setResult(response);
+      if (response.ok) router.refresh();
+    });
   }
 
   return (
-    <section aria-labelledby="trade-title" className="rounded-3xl border border-white/8 bg-slate-900 p-5">
+    <section aria-labelledby="trade-title" className="trade-panel rounded-3xl border border-white/8 bg-slate-900 p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-lime-200">Whole shares</p>
@@ -67,7 +73,7 @@ export function TradePanel({
                 type="button"
                 aria-pressed={side === value}
                 onClick={() => { setSide(value); setResult(null); }}
-                className={`min-h-11 rounded-lg text-sm font-semibold capitalize ${side === value ? "bg-lime-300 text-slate-950" : "text-slate-400 hover:text-white"}`}
+                className={`min-h-11 rounded-lg text-sm font-semibold capitalize ${side === value ? "action-primary" : "text-slate-400 hover:text-white"}`}
               >
                 {value}
               </button>
@@ -98,11 +104,11 @@ export function TradePanel({
             This quote is not current, so trading is disabled.
           </p>
         )}
-        {result && <p role="status" className="rounded-xl bg-sky-300/10 px-3 py-2 text-sm text-sky-100">{result.message}</p>}
+        {result && <p role="status" className={`rounded-xl px-3 py-2 text-sm ${result.ok ? "bg-emerald-300/10 text-emerald-100" : "bg-rose-300/10 text-rose-100"}`}>{result.message}</p>}
         <button
           type="submit"
           disabled={!tradable || Boolean(quantityError) || pending}
-          className="min-h-12 w-full rounded-xl bg-lime-300 px-5 font-semibold text-slate-950 hover:bg-lime-200 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+          className="min-h-12 w-full rounded-xl action-primary px-5 font-semibold disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
         >
           {pending ? "Checking trade…" : `${side === "buy" ? "Buy" : "Sell"} ${artist.symbol}`}
         </button>

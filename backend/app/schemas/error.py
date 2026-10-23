@@ -19,3 +19,15 @@ PROTECTED_NOT_IMPLEMENTED_RESPONSES = {
     401: {"model": ErrorResponse, "description": "Missing or invalid access token"},
     **NOT_IMPLEMENTED_RESPONSE,
 }
+MARKET_RESPONSES = {
+    404: {"model": ErrorResponse, "description": "Artist was not found"},
+    503: {"model": ErrorResponse, "description": "Market data is temporarily unavailable"},
+}
+PROTECTED_RESPONSES = {
+    401: {"model": ErrorResponse, "description": "Missing or invalid access token"},
+    409: {
+        "model": ErrorResponse,
+        "description": "The request conflicts with current account state",
+    },
+    503: {"model": ErrorResponse, "description": "A required service is unavailable"},
+}

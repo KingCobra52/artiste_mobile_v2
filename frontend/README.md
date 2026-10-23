@@ -1,12 +1,13 @@
-# Artiste frontend
+# Artiste web app
 
-This directory is an independent Next.js application. It does not use the root npm project or the Python backend.
+This directory is the Next.js web app. It uses Supabase Auth for sessions and calls the FastAPI service for all artist, quote, portfolio, and trade data.
 
 ## Requirements
 
 - Node.js 20.9 or newer
 - npm
-- The existing root Supabase CLI project for authenticated browser tests
+- Supabase for authentication and project data
+- The FastAPI service from the repository root
 
 ## Local setup
 
@@ -16,7 +17,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Run `npx supabase status` from the repository root and copy the local API URL and publishable key into `frontend/.env.local`. Only these public values use the `NEXT_PUBLIC_` prefix. Never put a secret or service-role key in frontend configuration.
+Copy `.env.example` to `.env.local`. Use the local Supabase API URL and publishable key for the public values, set `ARTISTE_API_URL` to the FastAPI service URL, and keep all server secrets out of frontend configuration.
 
 Start the app:
 
@@ -28,11 +29,17 @@ Without the public Supabase values, the app renders a setup message instead of c
 
 ## Authentication
 
-The beta supports email-and-password sign-in for accounts that already exist. It does not offer signup or password reset. Product routes verify the Supabase claims in their protected layout. Proxy refreshes the session cookies and provides an early redirect, but it is not the final authorization boundary.
+Users can create an account with email and password. Supabase email confirmation must be enabled, and the site's `/auth/callback` URL must be added to the Supabase redirect allowlist. Product routes verify Supabase claims; FastAPI independently verifies the access token before returning private portfolio data or accepting a trade.
 
 ## Placeholder data and trading
 
-Market and portfolio content is local preview data until the live database audit identifies the real tables. The trade server action validates authentication and client intent, then returns `not_connected` without reading or writing data. It never accepts a user ID, quote, cash balance, or position from the browser.
+Market quotes use the Last.fm track and YouTube channel snapshots. The price index starts at $10, weights the available audience signals equally, adjusts returns for collection gaps, and caps moves at 5% per day. Stale and unavailable quotes cannot be traded. All trades use simulated USD and are executed atomically by the database; the server, not the browser, supplies the quote and user ID.
+
+## Deployment
+
+Deploy the Next.js app from `frontend/` on Vercel. Deploy the FastAPI app from the repository root on Render using `render.yaml`. Configure `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL`, and `ARTISTE_API_URL` in Vercel. Configure `SUPABASE_URL` and `SUPABASE_SECRET_KEY` in Render. The service-role key is server-only.
+
+Apply the versioned Supabase migrations before deploying the API, configure the production auth redirect URL, and configure SMTP for production email verification. Do not use the Supabase secret key in Vercel's public environment variables or browser code.
 
 ## Checks
 
