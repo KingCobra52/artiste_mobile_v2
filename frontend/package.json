@@ -14,7 +14,8 @@
     "test:e2e": "npm run test:e2e:configured && npm run test:e2e:config",
     "test:e2e:configured": "playwright test",
     "test:e2e:config": "playwright test -c playwright.missing-config.config.ts",
-    "playwright:install": "playwright install chromium"
+    "playwright:install": "playwright install chromium webkit",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.0",
@@ -33,6 +34,7 @@
     "eslint": "^9.36.0",
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "4.1.12"
   }
 }

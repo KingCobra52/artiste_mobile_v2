@@ -12,15 +12,26 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function apiRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const baseUrl = process.env.ARTISTE_API_URL?.trim();
   if (!baseUrl) {
-    throw new ApiError("The Artiste API is not configured yet.", 503, "configuration_error");
+    throw new ApiError(
+      "The Artiste API is not configured yet.",
+      503,
+      "configuration_error",
+    );
   }
 
   const supabase = await createClient();
   if (!supabase) {
-    throw new ApiError("Supabase is not configured.", 503, "configuration_error");
+    throw new ApiError(
+      "Supabase is not configured.",
+      503,
+      "configuration_error",
+    );
   }
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) {
@@ -39,15 +50,22 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
       ...init,
       headers,
       cache: "no-store",
+      signal: init.signal ?? AbortSignal.timeout(10_000),
     });
   } catch {
-    throw new ApiError("The Artiste service is temporarily unavailable.", 503, "service_unavailable");
+    throw new ApiError(
+      "The Artiste service is temporarily unavailable.",
+      503,
+      "service_unavailable",
+    );
   }
 
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     throw new ApiError(
-      typeof payload?.message === "string" ? payload.message : "The request could not be completed.",
+      typeof payload?.message === "string"
+        ? payload.message
+        : "The request could not be completed.",
       response.status,
       typeof payload?.code === "string" ? payload.code : "request_failed",
     );

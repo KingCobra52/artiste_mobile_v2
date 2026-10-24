@@ -5,10 +5,24 @@ on:
     branches: [main]
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "supabase/**"
+      - "pipelines/**"
+      - "scripts/**"
+      - "tests/test_backend/**"
+      - "requirements.txt"
+      - "package*.json"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "backend/**"
+      - "supabase/**"
+      - "pipelines/**"
+      - "scripts/**"
+      - "tests/test_backend/**"
+      - "requirements.txt"
+      - "package*.json"
       - ".github/workflows/frontend.yml"
 
 jobs:
@@ -27,6 +41,46 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run test:unit
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:config
+
+  local-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: npm ci
+      - run: npm ci --prefix frontend
+      - run: pip install -r requirements.txt
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: frontend
+      - name: Start disposable local Supabase
+        run: npx supabase start -x studio,realtime,storage-api,imgproxy,postgres-meta,edge-runtime,logflare,vector,supavisor > /tmp/artiste-supabase.log 2>&1
+      - name: Prepare local test accounts
+        run: python -m scripts.setup_local_tests
+      - name: Start API
+        run: python -m scripts.run_local_checks api > /tmp/artiste-api.log 2>&1 &
+      - name: Check Chromium and WebKit journeys
+        run: python -m scripts.run_local_checks browser
+      - name: Check trusted execution and concurrency
+        run: python -m scripts.run_local_checks integration
+      - name: Upload browser failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phone-browser-failures
+          path: frontend/test-results/artifacts/
+          retention-days: 7

@@ -20,7 +20,9 @@ async def verify_access_token(client: object, token: str) -> CurrentUser:
         claims = (
             response.get("claims", response)
             if isinstance(response, dict)
-            else response.claims if response else None
+            else response.claims
+            if response
+            else None
         )
         subject = claims.get("sub") if isinstance(claims, dict) else None
         return CurrentUser(id=UUID(subject))

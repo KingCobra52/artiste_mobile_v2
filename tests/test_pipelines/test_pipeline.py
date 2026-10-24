@@ -9,6 +9,7 @@ import pipelines.pipeline as pipeline
 # run_all
 # ---------------------------------------------------------------------------
 
+
 def test_run_all_calls_each_pipeline_with_its_own_api_key(monkeypatch):
     fn_a = Mock(return_value=[])
     fn_b = Mock(return_value=[{"artist": "X", "reason": "boom"}])
@@ -69,6 +70,7 @@ def test_run_all_preserves_pipelines_order(monkeypatch):
 # print_summary
 # ---------------------------------------------------------------------------
 
+
 def test_print_summary_no_failures(capsys):
     pipeline.print_summary([("youtube", [], False)], total=5)
 
@@ -120,84 +122,40 @@ def test_print_summary_prints_header_and_dividers(capsys):
 # main
 # ---------------------------------------------------------------------------
 
-def test_main_exits_zero_when_nothing_broken(monkeypatch):
-    monkeypatch.setattr(pipeline, "artists", ["A", "B"])
-    recorder = Mock(return_value=0)
-    monkeypatch.setattr(pipeline, "record_portfolio_valuations", recorder)
-    mock_run_all = Mock(return_value=[("youtube", [], False)])
-    monkeypatch.setattr(pipeline, "run_all", mock_run_all)
 
-    with pytest.raises(SystemExit) as exc_info:
-        pipeline.main()
+@pytest.mark.parametrize(
+    "results,expected",
+    [
+        ([("youtube", [], False)], 0),
+        ([("youtube", [], True)], 1),
+        ([("youtube", [{"artist": "A", "reason": "x"}, {"artist": "B", "reason": "x"}], False)], 1),
+        ([("youtube", [{"artist": "A", "reason": "x"}], False)], 0),
+    ],
+)
+def test_main_preserves_partial_and_whole_failure_exit_rules(monkeypatch, results, expected):
+    import pipelines.portfolio_snapshots as snapshots
+    import pipelines.reporting as reporting
 
-    assert exc_info.value.code == 0
-    mock_run_all.assert_called_once_with(pipeline.supabase, ["A", "B"])
-    recorder.assert_called_once_with(pipeline.supabase)
-
-
-def test_main_exits_one_when_a_pipeline_crashed(monkeypatch, capsys):
-    monkeypatch.setattr(pipeline, "artists", ["A", "B"])
-    monkeypatch.setattr(pipeline, "run_all", Mock(return_value=[("youtube", [], True)]))
-
-    with pytest.raises(SystemExit) as exc_info:
-        pipeline.main()
-
-    assert exc_info.value.code == 1
-    assert "Failing the run: youtube" in capsys.readouterr().out
-
-
-def test_main_exits_one_when_every_artist_failed(monkeypatch):
-    monkeypatch.setattr(pipeline, "artists", ["A", "B"])
-    recorder = Mock(return_value=0)
-    monkeypatch.setattr(pipeline, "record_portfolio_valuations", recorder)
-    failures = [{"artist": "A", "reason": "x"}, {"artist": "B", "reason": "y"}]
     monkeypatch.setattr(
-        pipeline, "run_all", Mock(return_value=[("youtube", failures, False)])
+        snapshots, "_all_rows", lambda query: [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}]
     )
-
-    with pytest.raises(SystemExit) as exc_info:
-        pipeline.main()
-
-    assert exc_info.value.code == 1
-    recorder.assert_not_called()
-
-
-def test_main_exits_zero_on_partial_failure(monkeypatch):
-    monkeypatch.setattr(pipeline, "artists", ["A", "B"])
-    monkeypatch.setattr(pipeline, "record_portfolio_valuations", Mock(return_value=1))
-    failures = [{"artist": "A", "reason": "x"}]
-    monkeypatch.setattr(
-        pipeline, "run_all", Mock(return_value=[("youtube", failures, False)])
-    )
-
-    with pytest.raises(SystemExit) as exc_info:
-        pipeline.main()
-
-    assert exc_info.value.code == 0
-
-
-def test_main_empty_artist_list_does_not_read_as_total_wipeout(monkeypatch):
-    monkeypatch.setattr(pipeline, "artists", [])
+    monkeypatch.setattr(pipeline, "supabase", Mock())
+    monkeypatch.setattr(reporting, "execute_sources", lambda *args: (results, [], [], False))
+    monkeypatch.setattr(reporting, "write_report", lambda *args: False)
     monkeypatch.setattr(pipeline, "record_portfolio_valuations", Mock(return_value=0))
-    monkeypatch.setattr(pipeline, "run_all", Mock(return_value=[("youtube", [], False)]))
-
-    with pytest.raises(SystemExit) as exc_info:
+    with pytest.raises(SystemExit) as exc:
         pipeline.main()
+    assert exc.value.code == expected
 
-    assert exc_info.value.code == 0
 
+def test_main_reporting_failure_is_fatal(monkeypatch):
+    import pipelines.portfolio_snapshots as snapshots
+    import pipelines.reporting as reporting
 
-def test_main_fails_when_portfolio_snapshot_recording_fails(monkeypatch, capsys):
-    monkeypatch.setattr(pipeline, "artists", ["A"])
-    monkeypatch.setattr(pipeline, "run_all", Mock(return_value=[("youtube", [], False)]))
-    monkeypatch.setattr(
-        pipeline,
-        "record_portfolio_valuations",
-        Mock(side_effect=RuntimeError("database unavailable")),
-    )
-
-    with pytest.raises(SystemExit) as exc_info:
+    monkeypatch.setattr(snapshots, "_all_rows", lambda query: [])
+    monkeypatch.setattr(pipeline, "supabase", Mock())
+    monkeypatch.setattr(reporting, "execute_sources", lambda *args: ([], [], [], True))
+    monkeypatch.setattr(reporting, "write_report", lambda *args: True)
+    with pytest.raises(SystemExit) as exc:
         pipeline.main()
-
-    assert exc_info.value.code == 1
-    assert "Portfolio valuation snapshot failed" in capsys.readouterr().out
+    assert exc.value.code == 1

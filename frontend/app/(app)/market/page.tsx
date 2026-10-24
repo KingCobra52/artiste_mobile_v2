@@ -22,12 +22,31 @@ export default async function MarketPage() {
   return (
     <div>
       <div className="page-intro">
-        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-200">Market</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">Find your next artist</h1>
-        <p className="mt-2 text-slate-400">Follow the music. Explore virtual prices powered by audience growth.</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-lime-200">
+          Market
+        </p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
+          Find your next artist
+        </h1>
+        <p className="mt-2 text-slate-400">
+          Explore a supported selection of artists. Prices combine audience
+          signals with platform demand.
+        </p>
       </div>
+      <p className="mb-4 text-xs text-slate-400">
+        Percentage changes describe average audience growth per elapsed day.
+        Source dates and quote freshness appear on each artist.
+      </p>
       <div className="mt-5">
-        {error ? <ErrorState title="Market unavailable" message={error} /> : artists.length > 0 ? <MarketList artists={artists} quotes={quotes} /> : <EmptyState title="The market is empty">Artists will appear after the first data sync.</EmptyState>}
+        {error ? (
+          <ErrorState title="Market unavailable" message={error} />
+        ) : artists.length > 0 ? (
+          <MarketList artists={artists} quotes={quotes} />
+        ) : (
+          <EmptyState title="The market is empty">
+            Artists will appear after the first data sync.
+          </EmptyState>
+        )}
       </div>
     </div>
   );

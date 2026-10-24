@@ -1,3 +1,7 @@
+# Focused upgrade
+
+Current phone authentication, onboarding, pricing, portfolio and local integration setup are documented in [the focused upgrade guide](../docs/focused-upgrade.md). Trading starts in shadow mode. Real SMS delivery requires a configured provider.
+
 # Artiste web app
 
 This directory is the Next.js web app. It uses Supabase Auth for sessions and calls the FastAPI service for all artist, quote, portfolio, and trade data.
@@ -29,11 +33,11 @@ Without the public Supabase values, the app renders a setup message instead of c
 
 ## Authentication
 
-Users can create an account with email and password. Supabase email confirmation must be enabled, and the site's `/auth/callback` URL must be added to the Supabase redirect allowlist. Product routes verify Supabase claims; FastAPI independently verifies the access token before returning private portfolio data or accepting a trade.
+New accounts use phone/password signup with SMS verification. Recovery verifies an SMS code before changing the password. Existing accounts retain email login/recovery and can attach a verified phone without changing their UUID or portfolio. Configure a supported SMS provider (Twilio by default), the site URL and callback allowlist before rollout. Product routes verify Supabase claims; FastAPI independently verifies access tokens.
 
-## Placeholder data and trading
+## Market and paper trading
 
-Market quotes use the Last.fm track and YouTube channel snapshots. The price index starts at $10, weights the available audience signals equally, adjusts returns for collection gaps, and caps moves at 5% per day. Stale and unavailable quotes cannot be traded. All trades use simulated USD and are executed atomically by the database; the server, not the browser, supplies the quote and user ID.
+Market quotes use matched Last.fm track and YouTube channel observations. The external anchor blends independently normalized growth, accounts for elapsed days and caps daily growth at ±5%. Completed paper trades add a bounded inventory adjustment. Orders follow the entire pricing curve and include a 0.10% fee. Execution starts disabled in shadow mode; stale, unpublished and unsupported quotes cannot be traded. Trusted database transactions own cash, holdings, quote versions and retry handling. See the focused upgrade guide for rollout and valuation rules.
 
 ## Deployment
 

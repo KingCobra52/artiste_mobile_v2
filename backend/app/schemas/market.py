@@ -20,3 +20,12 @@ class MarketQuote(BaseModel):
     change_percent: float | None = None
     as_of: datetime | None = None
     status: QuoteStatus
+
+    quote_version: str | None = None
+    pricing_version: str = "audience-inventory-v2"
+    external_anchor_cents: int | None = None
+    demand_percent: float = 0
+    sources: dict = Field(default_factory=dict)
+    observation_count: int = 0
+
+    priced_at: datetime | None = None

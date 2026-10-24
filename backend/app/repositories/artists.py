@@ -28,22 +28,35 @@ class SupabaseArtistsRepository:
             name=row["name"],
             symbol=_symbol(row["name"], artist_id),
             genre=row.get("genre") or "Music",
+            **{
+                key: row[key]
+                for key in (
+                    "biography",
+                    "music_context",
+                    "notable_releases",
+                    "listening_url",
+                    "image_url",
+                    "context_source_url",
+                    "active",
+                    "exclusion_reason",
+                )
+                if key in row
+            },
         )
 
     async def list(self) -> list[Artist]:
-        response = (
-            await self.client.table("artists").select("id,name,genre").order("name").execute()
-        )
+        response = await self.client.table("artists").select("*").order("name").execute()
         return [self._artist(row) for row in response.data or []]
 
     async def get(self, artist_id: str) -> Artist | None:
-        if not artist_id.isdecimal():
+        if not artist_id.isdecimal() or int(artist_id) > 2147483647:
             return None
         response = (
             await self.client.table("artists")
-            .select("id,name,genre")
+            .select("*")
             .eq("id", int(artist_id))
             .maybe_single()
             .execute()
         )
-        return self._artist(response.data) if response.data else None
+        row = getattr(response, "data", None)
+        return self._artist(row) if row else None

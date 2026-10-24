@@ -8,7 +8,7 @@ import responses
 import pipelines.last_fm_pipeline as last_fm_pipeline
 from pipelines.last_fm_pipeline import LastfmError, dedupe_by_key, fetch_top_tracks, track_key
 
-LASTFM_URL = "http://ws.audioscrobbler.com/2.0/"
+LASTFM_URL = "https://ws.audioscrobbler.com/2.0/"
 
 
 def toptracks_payload(tracks):
@@ -331,7 +331,7 @@ def test_run_pipeline_non_http_request_error_reason_uses_request_prefix(monkeypa
     assert failures == [{"artist": "Some Artist", "reason": "request failed: Timeout"}]
 
 
-def test_run_pipeline_generic_exception_reason_includes_type_and_message(monkeypatch):
+def test_run_pipeline_generic_exception_reason_does_not_leak_message(monkeypatch):
     monkeypatch.setattr(
         last_fm_pipeline, "process_artist", Mock(side_effect=ValueError("bad row"))
     )
@@ -340,7 +340,7 @@ def test_run_pipeline_generic_exception_reason_includes_type_and_message(monkeyp
 
     failures = last_fm_pipeline.run_pipeline(supabase, "fake-key", ["Some Artist"])
 
-    assert failures == [{"artist": "Some Artist", "reason": "ValueError: bad row"}]
+    assert failures == [{"artist": "Some Artist", "reason": "ValueError"}]
 
 
 def test_run_pipeline_one_failure_does_not_stop_the_run(monkeypatch):
@@ -351,7 +351,7 @@ def test_run_pipeline_one_failure_does_not_stop_the_run(monkeypatch):
 
     failures = last_fm_pipeline.run_pipeline(supabase, "fake-key", ["Artist A", "Artist B"])
 
-    assert failures == [{"artist": "Artist A", "reason": "ValueError: boom"}]
+    assert failures == [{"artist": "Artist A", "reason": "ValueError"}]
     assert mock_process_artist.call_count == 2
 
 

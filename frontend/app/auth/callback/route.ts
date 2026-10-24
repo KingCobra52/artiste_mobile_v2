@@ -2,10 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
-function safeNextPath(value: string | null): string {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/market";
-  return value;
-}
+import { safeNextPath } from "@/lib/navigation";
 
 export async function GET(request: NextRequest) {
   const origin = request.nextUrl.origin;
@@ -17,7 +14,13 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createClient();
     const { error } = await supabase!.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(safeNextPath(request.nextUrl.searchParams.get("next")), origin));
+    if (!error) {
+      const destination =
+        request.nextUrl.searchParams.get("recovery") === "1"
+          ? "/reset-password"
+          : `/onboarding?next=${encodeURIComponent(safeNextPath(request.nextUrl.searchParams.get("next")))}`;
+      return NextResponse.redirect(new URL(destination, origin));
+    }
   }
 
   return NextResponse.redirect(new URL("/login?error=callback", origin));

@@ -21,7 +21,15 @@ class MarketService:
                 code="market_unavailable",
                 message="The market is temporarily unavailable.",
             )
-        return await self.artists.list()
+        artists = await self.artists.list()
+        fresh = {
+            quote.artist_id
+            for quote in await self.list_quotes()
+            if quote.status == "fresh"
+            and quote.observation_count >= 2
+            and quote.quote_version is not None
+        }
+        return [artist for artist in artists if artist.supported and artist.id in fresh]
 
     async def get_artist(self, artist_id: str) -> Artist:
         artist = await self.artists.get(artist_id) if self.artists else None

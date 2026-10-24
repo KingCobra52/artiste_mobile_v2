@@ -419,7 +419,7 @@ def test_run_pipeline_non_http_request_error_reason_uses_request_prefix(monkeypa
     assert failures == [{"artist": "Some Artist", "reason": "request failed: Timeout"}]
 
 
-def test_run_pipeline_generic_exception_reason_includes_type_and_message(monkeypatch):
+def test_run_pipeline_generic_exception_reason_does_not_leak_message(monkeypatch):
     monkeypatch.setattr(
         yt_pipeline, "process_artist", Mock(side_effect=ValueError("bad row"))
     )
@@ -428,7 +428,7 @@ def test_run_pipeline_generic_exception_reason_includes_type_and_message(monkeyp
 
     failures = yt_pipeline.run_pipeline(supabase, "fake-key", ["Some Artist"])
 
-    assert failures == [{"artist": "Some Artist", "reason": "ValueError: bad row"}]
+    assert failures == [{"artist": "Some Artist", "reason": "ValueError"}]
 
 
 def test_run_pipeline_one_failure_does_not_stop_the_run(monkeypatch):
@@ -439,7 +439,7 @@ def test_run_pipeline_one_failure_does_not_stop_the_run(monkeypatch):
 
     failures = yt_pipeline.run_pipeline(supabase, "fake-key", ["Artist A", "Artist B"])
 
-    assert failures == [{"artist": "Artist A", "reason": "ValueError: boom"}]
+    assert failures == [{"artist": "Artist A", "reason": "ValueError"}]
     assert mock_process_artist.call_count == 2
 
 

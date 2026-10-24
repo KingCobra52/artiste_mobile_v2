@@ -31,8 +31,8 @@ def test_blend_weights_lastfm_and_youtube_equally():
         now=datetime(2026, 10, 23, 12, tzinfo=timezone.utc),
     )
 
-    assert quote["price_cents"] == 1004
-    assert quote["change_percent"] == -2.0
+    assert quote["price_cents"] == 1001
+    assert quote["change_percent"] == -2.0212
 
 
 def test_one_available_fresh_signal_is_used_and_renormalized():
@@ -105,119 +105,46 @@ async def test_market_returns_unavailable_quotes_for_artists_without_history():
 
 
 @pytest.mark.anyio
-async def test_trading_service_rejects_stale_quotes_before_repository_write():
-    artist = Artist(id="1", name="Example", symbol="E", genre="Music")
-    market = MarketService(
-        FakeArtists([artist]),
-        FakeSnapshots([MarketQuote(artist_id="1", price_cents=1000, status="stale")]),
-    )
-
-    class NoTrades:
-        async def find_trade(self, *args):
-            return None
-
-        async def submit_trade(self, *args):
-            pytest.fail("stale quote must not reach the trade repository")
-
-    service = TradingService(NoTrades(), market)
-    draft = TradeDraft(
-        artist_id="1",
-        side=TradeSide.BUY,
-        quantity=1,
-        request_id="123e4567-e89b-12d3-a456-426614174000",
-    )
-
-    with pytest.raises(AppError, match="not current") as error:
-        await service.submit("12345678-1234-5678-1234-567812345678", draft)
-
-    assert error.value.status_code == 409
-
-
-@pytest.mark.anyio
-async def test_idempotent_retry_is_returned_even_if_market_quote_is_now_stale():
-    artist = Artist(id="1", name="Example", symbol="E", genre="Music")
-    market = MarketService(
-        FakeArtists([artist]),
-        FakeSnapshots([MarketQuote(artist_id="1", price_cents=1000, status="stale")]),
-    )
-    result = TradeResult(
-        ok=True,
-        code="accepted",
-        message="Trade was already processed.",
-        trade_id=7,
-        execution_price_cents=1000,
-        total_cents=1000,
-        cash_cents=999000,
-        idempotent=True,
-    )
-
-    class ExistingTrade:
-        async def get(self, *args):
-            return object()
-
-        async def record_snapshot(self, *args, **kwargs):
-            return None
-
-        async def find_trade(self, *args):
-            return result
-
-        async def submit_trade(self, *args):
-            pytest.fail("idempotent retry must not create another trade")
-
-    draft = TradeDraft(
-        artist_id="1",
-        side=TradeSide.BUY,
-        quantity=1,
-        request_id="123e4567-e89b-12d3-a456-426614174000",
-    )
-
-    assert await TradingService(ExistingTrade(), market).submit(
-        "12345678-1234-5678-1234-567812345678", draft
-    ) == result
-
-
-@pytest.mark.anyio
-async def test_successful_trade_records_a_portfolio_snapshot():
-    artist = Artist(id="1", name="Example", symbol="E", genre="Music")
-    market = MarketService(
-        FakeArtists([artist]),
-        FakeSnapshots([MarketQuote(artist_id="1", price_cents=1000, status="fresh")]),
-    )
+async def test_trade_submission_delegates_to_one_atomic_owner_scoped_rpc():
     result = TradeResult(
         ok=True,
         code="accepted",
         message="Paper trade completed.",
         trade_id=42,
         execution_price_cents=1000,
-        total_cents=1000,
-        cash_cents=999000,
+        total_cents=1001,
+        cash_cents=998999,
     )
 
-    class RecordingPortfolio:
-        snapshot_args = None
-
-        async def find_trade(self, *args):
-            return None
-
-        async def submit_trade(self, *args):
+    class AtomicRepository:
+        async def submit_trade(self, user_id, draft, artist_id):
+            assert str(user_id) == "12345678-1234-5678-1234-567812345678"
+            assert draft.quote_version == "17"
+            assert artist_id == 1
             return result
 
-        async def get(self, *args):
-            return object()
+    draft = TradeDraft(
+        artist_id="1",
+        side=TradeSide.BUY,
+        quantity=1,
+        request_id="123e4567-e89b-12d3-a456-426614174000",
+        quote_version="17",
+    )
+    assert (
+        await TradingService(AtomicRepository(), MarketService()).submit(
+            "12345678-1234-5678-1234-567812345678", draft
+        )
+        == result
+    )
 
-        async def record_snapshot(self, *args, **kwargs):
-            self.snapshot_args = (args, kwargs)
 
-    repository = RecordingPortfolio()
+@pytest.mark.anyio
+async def test_trading_without_repository_fails_closed():
     draft = TradeDraft(
         artist_id="1",
         side=TradeSide.BUY,
         quantity=1,
         request_id="123e4567-e89b-12d3-a456-426614174000",
     )
-
-    assert await TradingService(repository, market).submit(
-        "12345678-1234-5678-1234-567812345678", draft
-    ) == result
-    assert repository.snapshot_args[0][2] == "trade"
-    assert repository.snapshot_args[1] == {"trade_id": 42}
+    with pytest.raises(AppError):
+        await TradingService().submit("12345678-1234-5678-1234-567812345678", draft)

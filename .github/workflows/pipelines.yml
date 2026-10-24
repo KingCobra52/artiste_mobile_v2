@@ -47,6 +47,7 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
           LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          INGESTION_SCHEDULE: ${{ github.event.schedule || 'manual' }}
         run: python -m pipelines.pipeline
 
       # The alert that matters. A failed run already emails; a run that never
@@ -55,3 +56,12 @@ jobs:
       - name: Report success to the dead-man's switch
         if: success()
         run: curl -fsS -m 10 --retry 3 "${{ secrets.HEALTHCHECK_URL }}"
+
+      - name: Save ingestion analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-analysis
+          path: reports/ingestion/
+          if-no-files-found: warn
+          retention-days: 30

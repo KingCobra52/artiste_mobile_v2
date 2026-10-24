@@ -14,10 +14,11 @@ class TradeSide(StrEnum):
 class TradeDraft(BaseModel):
     model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
 
-    artist_id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    artist_id: str = Field(pattern=r"^[1-9][0-9]*$")
     side: TradeSide
-    quantity: int = Field(gt=0)
+    quantity: int = Field(gt=0, le=1_000_000)
     request_id: UUID
+    quote_version: str | None = None
 
 
 class TradeResult(BaseModel):
@@ -30,4 +31,19 @@ class TradeResult(BaseModel):
     execution_price_cents: int
     total_cents: int
     cash_cents: int
+    fee_cents: int = 0
     idempotent: bool = False
+
+
+class TradePreview(BaseModel):
+    model_config = ConfigDict(extra="forbid", alias_generator=to_camel, populate_by_name=True)
+    quote_version: str
+    gross_cents: int
+    fee_cents: int
+    total_cents: int
+    execution_price_cents: int
+    price_after_cents: int
+    price_impact_percent: float
+    shadow: bool
+    as_of: str
+    pricing_version: str

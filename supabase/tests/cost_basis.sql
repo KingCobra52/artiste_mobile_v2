@@ -1,0 +1,32 @@
+begin;
+insert into auth.users(id) values('30000000-0000-4000-8000-000000000001');
+select public.publish_artist_anchor(4,1000,now()-interval '1 hour','{}',1000);
+update public.pricing_controls set enabled=true;
+do $$
+declare first jsonb; second jsonb; preview jsonb; held jsonb; cost bigint; units bigint; snap_count bigint;
+begin
+ preview:=public.trade_estimate(4,'buy',1);
+ first:=public.execute_market_trade('30000000-0000-4000-8000-000000000001',4,'buy',1,'40000000-0000-4000-8000-000000000001',preview->>'quote_version');
+ perform public.publish_artist_anchor(4,1010,now(),'{}',1000);
+ preview:=public.trade_estimate(4,'buy',2);
+ second:=public.execute_market_trade('30000000-0000-4000-8000-000000000001',4,'buy',2,'40000000-0000-4000-8000-000000000002',preview->>'quote_version');
+ cost:=(first->>'total_cents')::bigint+(second->>'total_cents')::bigint;
+ select cost_basis_cents,quantity into units,snap_count from public.paper_positions where user_id='30000000-0000-4000-8000-000000000001';
+ assert units=cost and snap_count=3,'purchase basis lost cents';
+ preview:=public.trade_estimate(4,'sell',1);
+ perform public.execute_market_trade('30000000-0000-4000-8000-000000000001',4,'sell',1,'40000000-0000-4000-8000-000000000003',preview->>'quote_version');
+ assert (select quantity=2 and cost_basis_cents=cost-round(cost::numeric/3) from public.paper_positions where user_id='30000000-0000-4000-8000-000000000001'),'partial sale lost basis';
+ held:=public.get_portfolio_v2('30000000-0000-4000-8000-000000000001');
+ assert jsonb_array_length(held#>'{holdings,0,purchases}')=2;
+ assert (held#>>'{summary,total_value_cents}')::bigint=(held#>>'{summary,cash_cents}')::bigint+(held#>>'{holdings,0,current_value_cents}')::bigint;
+ select count(*) into snap_count from public.paper_portfolio_snapshots;
+ perform public.capture_portfolio_v2('30000000-0000-4000-8000-000000000001','quote_refresh',null);
+ assert (select count(*)=snap_count from public.paper_portfolio_snapshots),'unchanged observation was duplicated';
+ update public.artist_market_state set source_as_of=now()-interval '3 days' where artist_id=4;
+ held:=public.get_portfolio_v2('30000000-0000-4000-8000-000000000001');
+ assert held#>>'{holdings,0,valuation_basis}'='stale_quote';
+ assert held#>>'{summary,status}'='stale';
+ insert into public.youtube_snapshots(artist_id,date,subscribers) values(4,(now() at time zone 'UTC')::date+1,999999999);
+ assert not exists(select 1 from public.get_pricing_observations() where snapshot_date>(now() at time zone 'UTC')::date),'future source observation escaped filtering';
+end $$;
+rollback;

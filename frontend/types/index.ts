@@ -5,6 +5,13 @@ export interface Artist {
   name: string;
   symbol: string;
   genre: string;
+  biography?: string;
+  musicContext?: string;
+  notableReleases?: string[];
+  listeningUrl?: string;
+  contextSourceUrl?: string;
+  imageUrl?: string | null;
+  active?: boolean;
 }
 
 export interface MarketQuote {
@@ -13,6 +20,15 @@ export interface MarketQuote {
   changePercent: number | null;
   asOf: ISODateString | null;
   status: "fresh" | "stale" | "unavailable";
+  quoteVersion?: string | null;
+  pricedAt?: string | null;
+  pricingVersion?: string;
+  demandPercent?: number;
+  externalAnchorCents?: number | null;
+  sources?: Record<
+    string,
+    { asOf?: string; elapsedDays?: number; matchedTracks?: number }
+  >;
 }
 
 export interface TradeDraft {
@@ -20,6 +36,7 @@ export interface TradeDraft {
   side: "buy" | "sell";
   quantity: number;
   requestId: string;
+  quoteVersion?: string;
 }
 
 export type TradeResult =
@@ -41,6 +58,20 @@ export interface Holding {
   averageCostCents: number;
   currentValueCents: number | null;
   firstPurchasedAt: ISODateString;
+  lastPurchasedAt?: ISODateString | null;
+  costBasisCents?: number;
+  costBasisMethod?: string;
+  currentPriceCents?: number | null;
+  quoteAsOf?: ISODateString | null;
+  dataSourceAsOf?: ISODateString | null;
+  valuationBasis?: "quote" | "stale_quote" | "purchase_cost";
+  purchases?: {
+    quantity: number;
+    priceCents: number;
+    totalCents: number;
+    feeCents: number;
+    date: string;
+  }[];
 }
 
 export interface PortfolioSummary {
@@ -48,7 +79,8 @@ export interface PortfolioSummary {
   holdingsValueCents: number | null;
   totalValueCents: number | null;
   gainLossCents: number | null;
-  asOf: ISODateString;
+  asOf: ISODateString | null;
+  calculatedAt?: ISODateString;
   status: "fresh" | "stale";
 }
 
@@ -78,4 +110,17 @@ export interface PortfolioAllocation {
   label: string;
   valueCents: number;
   percentage: number;
+}
+
+export interface TradePreview {
+  quoteVersion: string;
+  grossCents: number;
+  feeCents: number;
+  totalCents: number;
+  executionPriceCents: number;
+  priceAfterCents: number;
+  priceImpactPercent: number;
+  shadow: boolean;
+  asOf: string;
+  pricingVersion: string;
 }

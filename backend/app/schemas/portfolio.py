@@ -18,6 +18,15 @@ class Holding(BaseModel):
     quantity: int = Field(ge=0)
     average_cost_cents: int = Field(ge=0)
     current_value_cents: int | None = Field(default=None, ge=0)
+    current_price_cents: int | None = None
+    cost_basis_cents: int = 0
+    cost_basis_method: str = "ledger"
+    quote_as_of: datetime | None = None
+    data_source_as_of: datetime | None = None
+    valuation_basis: str = "quote"
+    quote_version: str | None = None
+    purchases: list[dict] = Field(default_factory=list)
+    last_purchased_at: datetime | None = None
     first_purchased_at: datetime
 
 
@@ -28,7 +37,8 @@ class PortfolioSummary(BaseModel):
     holdings_value_cents: int | None = Field(default=None, ge=0)
     total_value_cents: int | None = Field(default=None, ge=0)
     gain_loss_cents: int | None = None
-    as_of: datetime
+    as_of: datetime | None
+    calculated_at: datetime | None = None
     status: PortfolioStatus
 
 
@@ -41,6 +51,7 @@ class TradeHistoryItem(BaseModel):
     quantity: int = Field(gt=0)
     execution_price_cents: int = Field(gt=0)
     total_cents: int = Field(gt=0)
+    fee_cents: int = 0
     executed_at: datetime
 
 

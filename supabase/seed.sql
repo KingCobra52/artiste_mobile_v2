@@ -33,3 +33,23 @@ on conflict (id) do update set
 
 select setval(pg_get_serial_sequence('public.artists', 'id'),
   greatest((select coalesce(max(id), 1) from public.artists), 1), true);
+
+update public.artists set active=true, exclusion_reason=null, genre='Hip-hop',
+ biography='Kendrick Lamar is a rapper from Compton, California, known for narrative albums and character-driven writing.',
+ music_context='Explore West Coast rap through the contrasting album worlds of good kid, m.A.A.d city and To Pimp a Butterfly.',
+ notable_releases='["good kid, m.A.A.d city", "To Pimp a Butterfly", "DAMN."]',
+ listening_url='https://www.youtube.com/channel/UC3lBXcrKFnFAFkfVk5WuKcQ',
+ context_source_url='https://www.last.fm/music/Kendrick+Lamar/+wiki'
+ where name='Kendrick Lamar';
+update public.artists set active=true, exclusion_reason=null, genre='Hip-hop',
+ biography='JID is an Atlanta rapper whose music pairs detailed storytelling with agile vocal rhythms.',
+ music_context='His music connects Atlanta rap with funk and soul influences. Start with The Forever Story and its intricate narrative songs.',
+ notable_releases='["The Never Story", "DiCaprio 2", "The Forever Story"]',
+ listening_url='https://www.youtube.com/channel/UC3WIRbOw46MsbycRc1N5x4g',
+ context_source_url='https://www.last.fm/music/JID/+wiki' where name='JID';
+update public.artists set active=true, exclusion_reason=null, genre='Hip-hop',
+ biography='Denzel Curry is a rapper from Carol City in Miami Gardens, Florida.',
+ music_context='His records move between intense delivery, introspection, and South Florida rap influences. Compare the energy of ZUU with Melt My Eyez See Your Future.',
+ notable_releases='["TA13OO", "ZUU", "Melt My Eyez See Your Future"]',
+ listening_url='https://www.youtube.com/channel/UCiKxNv_MHAShqT2lATxG_Wg',
+ context_source_url='https://www.last.fm/music/Denzel+Curry/+wiki' where name='Denzel Curry';

@@ -13,7 +13,5 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
     responses=PROTECTED_RESPONSES,
     summary="Get the current user's portfolio",
 )
-async def get_portfolio(
-    user: CurrentUserDep, service: PortfolioServiceDep
-) -> Portfolio:
+async def get_portfolio(user: CurrentUserDep, service: PortfolioServiceDep) -> Portfolio:
     return await service.get_portfolio(user.id)

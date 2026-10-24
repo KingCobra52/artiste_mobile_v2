@@ -1,8 +1,8 @@
-from datetime import date
+from datetime import datetime
 from typing import Protocol
 
 from backend.app.schemas.market import MarketQuote
-from backend.app.services.pricing import calculate_quote
+from backend.app.services.pricing import audience_quote, utc_now
 from supabase import AsyncClient
 
 
@@ -10,25 +10,59 @@ class SnapshotsRepository(Protocol):
     async def list_quotes(self) -> list[MarketQuote]: ...
 
 
+async def all_rows(query) -> list[dict]:
+    rows = []
+    for offset in range(0, 10_000_000, 500):
+        batch = (await query.range(offset, offset + 499).execute()).data or []
+        rows.extend(batch)
+        if len(batch) < 500:
+            return rows
+    raise RuntimeError("Snapshot result exceeds safety limit")
+
+
+async def observations(client) -> list[dict]:
+    return await all_rows(client.rpc("get_pricing_observations"))
+
+
 class SupabaseSnapshotsRepository:
     def __init__(self, client: AsyncClient) -> None:
         self.client = client
 
     async def list_quotes(self) -> list[MarketQuote]:
-        response = await self.client.rpc("get_market_snapshots").execute()
-        grouped: dict[int, dict[str, list[tuple]]] = {}
-        for row in response.data or []:
-            record = grouped.setdefault(int(row["artist_id"]), {"lastfm": [], "youtube": []})
-            day = row["snapshot_date"]
-            if isinstance(day, str):
-                day = date.fromisoformat(day)
-            record["lastfm"].append((day, row.get("lastfm_playcount")))
-            record["youtube"].append((day, row.get("youtube_subscribers")))
+        grouped: dict[str, list[dict]] = {}
+        for row in await observations(self.client):
+            grouped.setdefault(str(row["artist_id"]), []).append(row)
+        states = {
+            str(row["artist_id"]): row
+            for row in await all_rows(self.client.table("artist_market_state").select("*"))
+        }
+        quotes = []
+        for artist_id, rows in grouped.items():
+            calculated = audience_quote(rows)
+            calculated.pop("matched_tracks")
+            state = states.get(artist_id)
+            if (
+                state
+                and state["source_as_of"]
+                and datetime.fromisoformat(state["source_as_of"].replace("Z", "+00:00"))
+                <= utc_now()
+            ):
+                calculated.update(
+                    price_cents=state["price_cents"],
+                    as_of=state["source_as_of"],
+                    quote_version=str(state["version"]),
+                    priced_at=state["priced_at"],
+                    external_anchor_cents=round(float(state["anchor_cents"])),
+                    demand_percent=float(state["demand_percent"]),
+                )
+                from backend.app.services.pricing import FRESHNESS_WINDOW
 
-        return [
-            MarketQuote(
-                artist_id=str(artist_id),
-                **calculate_quote(record["lastfm"], record["youtube"]),
-            )
-            for artist_id, record in sorted(grouped.items())
-        ]
+                calculated["status"] = (
+                    "fresh"
+                    if utc_now()
+                    - datetime.fromisoformat(state["source_as_of"].replace("Z", "+00:00"))
+                    <= FRESHNESS_WINDOW
+                    else "stale"
+                )
+            quotes.append(MarketQuote(artist_id=artist_id, **calculated))
+        return quotes

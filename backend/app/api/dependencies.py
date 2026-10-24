@@ -46,8 +46,7 @@ def get_market_service(client: SupabaseDep) -> MarketService:
 def get_portfolio_service(client: SupabaseDep) -> PortfolioService:
     from backend.app.repositories.portfolios import SupabasePortfoliosRepository
 
-    market = get_market_service(client)
-    return PortfolioService(SupabasePortfoliosRepository(client), market)
+    return PortfolioService(SupabasePortfoliosRepository(client))
 
 
 def get_trading_service(client: SupabaseDep) -> TradingService:

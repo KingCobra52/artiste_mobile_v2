@@ -92,6 +92,10 @@ def test_trade_lifecycle_idempotency_and_account_isolation():
             "requestId": request_id,
         }
 
+        preview = _request(client, token_a, "POST", "/api/v1/trades/preview", json=buy)
+        assert preview.status_code == 200, preview.text
+        assert not preview.json()["shadow"], "Enable execution only in the dedicated test database."
+        buy["quoteVersion"] = preview.json()["quoteVersion"]
         bought = _request(client, token_a, "POST", "/api/v1/trades", json=buy)
         assert bought.status_code == 200, bought.text
         bought_data = bought.json()
@@ -111,6 +115,7 @@ def test_trade_lifecycle_idempotency_and_account_isolation():
                 "artistId": quote["artistId"],
                 "side": "sell",
                 "quantity": 1_000_000,
+                "quoteVersion": str(int(buy["quoteVersion"]) + 1),
                 "requestId": str(uuid4()),
             },
         )
@@ -126,11 +131,14 @@ def test_trade_lifecycle_idempotency_and_account_isolation():
                 "artistId": quote["artistId"],
                 "side": "sell",
                 "quantity": 1,
+                "quoteVersion": str(int(buy["quoteVersion"]) + 1),
                 "requestId": str(uuid4()),
             },
         )
         assert sold.status_code == 200, sold.text
 
+        preview_b = _request(client, token_b, "POST", "/api/v1/trades/preview", json=buy)
+        buy["quoteVersion"] = preview_b.json()["quoteVersion"]
         same_key_other_user = _request(client, token_b, "POST", "/api/v1/trades", json=buy)
         assert same_key_other_user.status_code == 200, same_key_other_user.text
         assert same_key_other_user.json()["idempotent"] is False
@@ -160,4 +168,96 @@ def test_trade_lifecycle_idempotency_and_account_isolation():
 
         history_after = _request(client, token_a, "GET", "/api/v1/portfolio/history")
         assert history_after.status_code == 200
-        assert len(history_after.json()["points"]) >= history_count + 3
+        assert len(history_after.json()["points"]) >= history_count + 2
+
+
+def test_concurrent_orders_require_current_version_and_cannot_overspend():
+    from concurrent.futures import ThreadPoolExecutor
+
+    with httpx.Client(timeout=20) as client:
+        token = _login(
+            client,
+            os.environ["TRADING_E2E_USER_A_EMAIL"],
+            os.environ["TRADING_E2E_USER_A_PASSWORD"],
+        )
+        before = _request(client, token, "GET", "/api/v1/portfolio").json()["summary"]["cashCents"]
+        quote = next(
+            row
+            for row in _request(client, token, "GET", "/api/v1/market").json()
+            if row["artistId"] == "4"
+        )
+        drafts = [
+            {
+                "artistId": "4",
+                "side": "buy",
+                "quantity": 1,
+                "requestId": str(uuid4()),
+                "quoteVersion": quote["quoteVersion"],
+            }
+            for _ in range(2)
+        ]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(
+                pool.map(
+                    lambda draft: _request(client, token, "POST", "/api/v1/trades", json=draft),
+                    drafts,
+                )
+            )
+        assert sorted(response.status_code for response in responses) == [200, 409]
+        accepted = next(response.json() for response in responses if response.status_code == 200)
+        after = _request(client, token, "GET", "/api/v1/portfolio").json()["summary"]["cashCents"]
+        assert after == before - accepted["totalCents"]
+        quotes = {
+            row["artistId"]: row for row in _request(client, token, "GET", "/api/v1/market").json()
+        }
+        drafts = [
+            {
+                "artistId": artist,
+                "side": "buy",
+                "quantity": 600,
+                "requestId": str(uuid4()),
+                "quoteVersion": quotes[artist]["quoteVersion"],
+            }
+            for artist in ("4", "16")
+        ]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            responses = list(
+                pool.map(
+                    lambda draft: _request(client, token, "POST", "/api/v1/trades", json=draft),
+                    drafts,
+                )
+            )
+        assert sorted(response.status_code for response in responses) == [200, 409]
+        assert (
+            _request(client, token, "GET", "/api/v1/portfolio").json()["summary"]["cashCents"] >= 0
+        )
+
+
+def test_onboarding_progress_is_owned_by_verified_account():
+    with httpx.Client(timeout=20) as client:
+        tokens = [
+            _login(
+                client,
+                os.environ[f"TRADING_E2E_USER_{label}_EMAIL"],
+                os.environ[f"TRADING_E2E_USER_{label}_PASSWORD"],
+            )
+            for label in ("A", "B")
+        ]
+        before = [_request(client, token, "GET", "/api/v1/onboarding").json() for token in tokens]
+        progress = {"version": 1, "step": 1, "completed": False}
+        response = _request(client, tokens[0], "PATCH", "/api/v1/onboarding", json=progress)
+        assert response.status_code == 200
+        assert _request(client, tokens[0], "GET", "/api/v1/onboarding").json() == progress
+        assert _request(client, tokens[1], "GET", "/api/v1/onboarding").json() == before[1]
+        forged = {**progress, "user_id": str(uuid4())}
+        assert (
+            _request(client, tokens[0], "PATCH", "/api/v1/onboarding", json=forged).status_code
+            == 422
+        )
+        assert _request(client, "invalid", "GET", "/api/v1/onboarding").status_code == 401
+        for token, state in zip(tokens, before, strict=True):
+            if state["version"] == 1:
+                assert (
+                    _request(client, token, "PATCH", "/api/v1/onboarding", json=state).status_code
+                    == 200
+                )

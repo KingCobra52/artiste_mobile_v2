@@ -31,12 +31,27 @@ export default defineConfig({
       dependencies: ["setup"],
       use: { storageState: authFile },
     },
+    {
+      name: "public-webkit-phone",
+      testMatch: /public\.spec\.ts/,
+      use: {
+        browserName: "webkit",
+        storageState: { cookies: [], origins: [] },
+      },
+    },
+    {
+      name: "authenticated-webkit-phone",
+      testMatch: /app\.spec\.ts/,
+      dependencies: ["setup"],
+      use: { browserName: "webkit", storageState: authFile },
+    },
   ],
   webServer: {
-    command: "npm run dev -- --hostname 127.0.0.1 --port 3000",
+    command:
+      "npm run build -- --webpack && npm run start -- --hostname 127.0.0.1 --port 3000",
     url: "http://127.0.0.1:3000/login",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });
 

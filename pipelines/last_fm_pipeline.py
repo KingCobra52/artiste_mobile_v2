@@ -19,7 +19,7 @@ today = date.today()
 session = requests.Session()
 
 
-URL = "http://ws.audioscrobbler.com/2.0/"
+URL = "https://ws.audioscrobbler.com/2.0/"
 
 #takes the top 10 tracks per artists
 TOP_N = 10
@@ -259,7 +259,7 @@ def run_pipeline(supabase, lastfm_api_key, artists):
             artist_append_failures.append({"artist": artist, "reason": reason})
         # Everything else. One bad artist must not kill the other 23.
         except Exception as e:
-            reason = f"{type(e).__name__}: {e}"
+            reason = type(e).__name__
             print(f"Non-HTTP error occured for {artist}: {reason}")
             artist_append_failures.append({"artist": artist, "reason": reason})
 

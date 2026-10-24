@@ -2,11 +2,16 @@
 
 from datetime import date, datetime, timezone
 
-from backend.app.services.pricing import calculate_quote
+from backend.app.services.legacy_pricing import calculate_quote
 
 
 def price_history(rows: list[dict], artist_id: str) -> list[dict]:
-    rows = [r for r in rows if str(r["artist_id"]) == artist_id]
+    rows = [
+        r
+        for r in rows
+        if str(r["artist_id"]) == artist_id
+        and str(r["snapshot_date"])[:10] <= datetime.now(timezone.utc).date().isoformat()
+    ]
     days = sorted(
         {
             str(r["snapshot_date"])
@@ -31,6 +36,7 @@ def price_history(rows: list[dict], artist_id: str) -> list[dict]:
         points.append(
             {
                 "date": day,
+                "pricingVersion": "reconstructed-v1",
                 "valueCents": quote["price_cents"],
                 "status": quote["status"],
                 "sourceDate": quote["as_of"].isoformat(),

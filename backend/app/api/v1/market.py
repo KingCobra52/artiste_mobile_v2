@@ -15,3 +15,8 @@ router = APIRouter(prefix="/market", tags=["market"])
 )
 async def list_market(service: MarketServiceDep) -> list[MarketQuote]:
     return await service.list_quotes()
+
+
+@router.get("/{artist_id}", response_model=MarketQuote)
+async def artist_quote(artist_id: int, service: MarketServiceDep):
+    return await service.quote_for(str(artist_id))

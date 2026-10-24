@@ -1,97 +1,179 @@
+"""Gap-aware audience anchors and a bounded inventory curve for virtual shares."""
+
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import ROUND_CEILING, ROUND_FLOOR, Decimal
 
 BASE_PRICE_CENTS = 1_000
 MAX_DAILY_MOVE = 0.05
 FRESHNESS_WINDOW = timedelta(hours=48)
+MODEL_VERSION = "audience-inventory-v2"
+LIQUIDITY = 10_000
+PREMIUM_LIMIT = 0.20
+FEE_BPS = 10
 
 
-def _observations(points: Iterable[tuple[date, int | None]]) -> dict[date, int]:
-    observations: dict[date, int] = {}
-    for day, value in points:
-        if value is not None and value > 0:
-            observations[day] = value
-    return observations
+def utc_now(now: datetime | None = None) -> datetime:
+    value = now or datetime.now(timezone.utc)
+    return (
+        value.replace(tzinfo=timezone.utc)
+        if value.tzinfo is None
+        else value.astimezone(timezone.utc)
+    )
 
 
-def calculate_quote(
-    lastfm: Iterable[tuple[date, int | None]],
-    youtube: Iterable[tuple[date, int | None]],
-    *,
-    now: datetime | None = None,
-) -> dict[str, int | float | datetime | str | None]:
-    """Build a blended quote while keeping newly available signals from resetting it."""
-    current = now or datetime.now(timezone.utc)
-    if current.tzinfo is None:
-        current = current.replace(tzinfo=timezone.utc)
-    current = current.astimezone(timezone.utc)
-
-    observations = {
-        "lastfm": _observations(lastfm),
-        "youtube": _observations(youtube),
+def _observations(points: Iterable[tuple[date, int | None]], cutoff: date) -> dict[date, int]:
+    return {
+        day: value for day, value in points if day <= cutoff and value is not None and value > 0
     }
-    days = sorted(set(observations["lastfm"]) | set(observations["youtube"]))
-    if not days:
-        return {
-            "price_cents": None,
-            "change_percent": None,
-            "as_of": None,
-            "status": "unavailable",
-        }
 
+
+def calculate_quote(lastfm, youtube, *, now: datetime | None = None) -> dict:
+    current = utc_now(now)
+    observations = {
+        "lastfm": _observations(lastfm, current.date()),
+        "youtube": _observations(youtube, current.date()),
+    }
     indices: dict[str, float] = {}
     previous: dict[str, tuple[date, int]] = {}
-    latest_returns: dict[str, float] = {}
-    market_index = float(BASE_PRICE_CENTS)
-
-    for day in days:
-        updated: list[tuple[str, int]] = []
-        first_observations: list[str] = []
+    returns: dict[str, float] = {}
+    intervals: dict[str, int] = {}
+    for day in sorted(set(observations["lastfm"]) | set(observations["youtube"])):
         for signal, series in observations.items():
-            value = series.get(day)
-            if value is None:
+            if day not in series:
                 continue
-            previous_point = previous.get(signal)
-            if previous_point is None:
-                first_observations.append(signal)
-                updated.append((signal, value))
-                continue
-
-            previous_day, previous_value = previous_point
-            elapsed_days = (day - previous_day).days
-            if elapsed_days > 0:
-                daily_return = ((value - previous_value) / previous_value) / elapsed_days
-                daily_return = max(-MAX_DAILY_MOVE, min(MAX_DAILY_MOVE, daily_return))
-                indices[signal] *= (1 + daily_return) ** elapsed_days
-                latest_returns[signal] = daily_return
-            updated.append((signal, value))
-
-        # A signal that begins later inherits the current blended level instead
-        # of introducing a price jump when it first enters the market.
-        if first_observations:
-            market_index = (
-                sum(indices.values()) / len(indices) if indices else float(BASE_PRICE_CENTS)
-            )
-            for signal in first_observations:
-                indices[signal] = market_index
-                latest_returns[signal] = 0.0
-
-        for signal, value in updated:
+            value = series[day]
+            if signal not in previous:
+                indices[signal] = float(BASE_PRICE_CENTS)
+                returns[signal] = 0.0
+            else:
+                prior_day, prior_value = previous[signal]
+                elapsed = (day - prior_day).days
+                growth = max(
+                    -MAX_DAILY_MOVE, min(MAX_DAILY_MOVE, (value / prior_value) ** (1 / elapsed) - 1)
+                )
+                indices[signal] *= (1 + growth) ** elapsed
+                returns[signal] = growth
+                intervals[signal] = elapsed
             previous[signal] = (day, value)
-        if indices:
-            market_index = sum(indices.values()) / len(indices)
-
-    latest_days = [point[0] for point in previous.values()]
-    as_of_day = min(latest_days)
-    as_of = datetime.combine(as_of_day, time.min, timezone.utc)
-    status = "fresh" if current - as_of <= FRESHNESS_WINDOW else "stale"
-    change_percent = sum(latest_returns.values()) / len(latest_returns) * 100
-
+    if not previous:
+        return {"price_cents": None, "change_percent": None, "as_of": None, "status": "unavailable"}
+    as_of = datetime.combine(min(point[0] for point in previous.values()), time.min, timezone.utc)
     return {
-        "price_cents": max(1, round(market_index)),
-        "change_percent": round(change_percent, 4),
+        "price_cents": max(1, round(sum(indices.values()) / len(indices))),
+        "change_percent": round(sum(returns.values()) / len(returns) * 100, 4),
         "as_of": as_of,
-        "status": status,
+        "status": "fresh" if current - as_of <= FRESHNESS_WINDOW else "stale",
+    }
+
+
+def audience_quote(rows: list[dict], *, now: datetime | None = None) -> dict:
+    """Chain matched-track returns; new top tracks cannot manufacture growth."""
+    current = utc_now(now)
+    lastfm, youtube = [], []
+    prior_tracks: dict[str, int] = {}
+    prior_day = None
+    track_index = 1_000_000.0
+    coverage = 0
+    sources = {}
+    for row in sorted(rows, key=lambda row: str(row["snapshot_date"])):
+        day = date.fromisoformat(str(row["snapshot_date"])[:10])
+        if day > current.date():
+            continue
+        tracks = {
+            key: int(value)
+            for key, value in (row.get("lastfm_tracks") or {}).items()
+            if value is not None and int(value) > 0
+        }
+        if tracks:
+            shared = tracks.keys() & prior_tracks.keys()
+            coverage = len(shared)
+            if shared and prior_day is not None:
+                elapsed = (day - prior_day).days
+                if elapsed > 0:
+                    ratio = sum(tracks[key] for key in shared) / sum(
+                        prior_tracks[key] for key in shared
+                    )
+                    growth = max(-MAX_DAILY_MOVE, min(MAX_DAILY_MOVE, ratio ** (1 / elapsed) - 1))
+                    track_index *= (1 + growth) ** elapsed
+                    lastfm.append((day, round(track_index)))
+                    sources["lastfm"] = {
+                        "asOf": day.isoformat(),
+                        "matchedTracks": len(shared),
+                        "elapsedDays": elapsed,
+                    }
+            elif prior_day is None:
+                lastfm.append((day, round(track_index)))
+            prior_tracks, prior_day = tracks, day
+        value = row.get("youtube_subscribers")
+        if value is not None and int(value) > 0:
+            youtube.append((day, int(value)))
+            sources["youtube"] = {"asOf": day.isoformat()}
+    # A single baseline is not a measured audience signal. Do not dilute a
+    # valid source with an unmeasured or completely disjoint source.
+    if len(lastfm) < 2:
+        lastfm = []
+        sources.pop("lastfm", None)
+    if len(youtube) < 2:
+        youtube = []
+        sources.pop("youtube", None)
+    measured = {"lastfm": lastfm, "youtube": youtube}
+    fresh = {
+        source
+        for source, series in measured.items()
+        if series
+        and current - datetime.combine(series[-1][0], time.min, timezone.utc) <= FRESHNESS_WINDOW
+    }
+    for source, series in measured.items():
+        if source in sources:
+            included = not fresh or source in fresh
+            sources[source]["included"] = included
+            if not included:
+                sources[source]["excludedReason"] = "stale_source"
+                measured[source] = []
+    lastfm, youtube = measured["lastfm"], measured["youtube"]
+    quote = calculate_quote(lastfm, youtube, now=current)
+    quote.update(
+        sources=sources,
+        observation_count=len(set(day for day, _ in lastfm + youtube)),
+        matched_tracks=coverage,
+        pricing_version=MODEL_VERSION,
+    )
+    return quote
+
+
+def marginal_price(anchor: float, inventory: int) -> float:
+    return anchor * (1 + PREMIUM_LIMIT * math.tanh(inventory / LIQUIDITY))
+
+
+def _log_cosh(value: float) -> float:
+    return abs(value) + math.log1p(math.exp(-2 * abs(value))) - math.log(2)
+
+
+def curve_order(anchor: int, inventory: int, quantity: int, side: str) -> dict:
+    if anchor < 1 or quantity < 1 or quantity > 1_000_000 or side not in ("buy", "sell"):
+        raise ValueError("Invalid virtual order")
+    end = inventory + (quantity if side == "buy" else -quantity)
+    integral = anchor * (
+        end
+        - inventory
+        + PREMIUM_LIMIT
+        * LIQUIDITY
+        * (_log_cosh(end / LIQUIDITY) - _log_cosh(inventory / LIQUIDITY))
+    )
+    gross = int(
+        Decimal(str(abs(integral))).to_integral_value(
+            rounding=ROUND_CEILING if side == "buy" else ROUND_FLOOR
+        )
+    )
+    fee = (gross * FEE_BPS + 9999) // 10000
+    return {
+        "gross_cents": gross,
+        "fee_cents": fee,
+        "total_cents": gross + fee if side == "buy" else max(0, gross - fee),
+        "execution_price_cents": round(gross / quantity),
+        "price_after_cents": round(marginal_price(anchor, end)),
     }

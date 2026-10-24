@@ -198,7 +198,7 @@ def run_pipeline(supabase, yt_api_key, artists):
             artist_append_failures.append({"artist": artist, "reason": reason})
         # Everything else. Supabase errors land here. No key in those.
         except Exception as e:
-            reason = f"{type(e).__name__}: {e}"
+            reason = type(e).__name__
             print(f"Non-HTTP error occured for {artist}: {reason}")
             artist_append_failures.append({"artist": artist, "reason": reason})
 

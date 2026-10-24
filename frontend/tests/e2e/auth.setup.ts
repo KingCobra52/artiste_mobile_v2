@@ -12,9 +12,17 @@ setup("sign in with the dedicated test account", async ({ page }) => {
   }
 
   await page.goto("/login");
+  await page.getByRole("button", { name: "Existing email account" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
+  const skip = page.getByRole("button", { name: "Skip", exact: true });
+  // Completed accounts can pass through /onboarding before its server redirect.
+  await Promise.race([
+    page.waitForURL(/\/market$/),
+    skip.waitFor({ state: "visible" }),
+  ]);
+  if (await skip.isVisible()) await skip.click();
   await expect(page).toHaveURL(/\/market$/);
   await page.context().storageState({ path: authFile });
 });
