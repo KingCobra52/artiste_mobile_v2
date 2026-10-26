@@ -17,6 +17,18 @@ test("onboarding has three screens, resumes and can be skipped", async ({
   await page.getByRole("button", { name: "Skip", exact: true }).click();
   await expect(page).toHaveURL(/\/login/);
 });
+test("Get started opens sign in with the intended destination", async ({
+  page,
+}) => {
+  await page.goto("/onboarding?next=%2Fartists%2F4%3Ftab%3Dmusic");
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Get started" }).click();
+  await expect(page).toHaveURL(
+    /\/login\?next=%2Fartists%2F4%3Ftab%3Dmusic$/,
+  );
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+});
 test("phone signup and password recovery use accessible phone inputs", async ({
   page,
 }) => {

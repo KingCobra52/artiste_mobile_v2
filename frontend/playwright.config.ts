@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   outputDir: "test-results/artifacts",
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: "http://localhost:3000",
     ...devices["iPhone 13"],
     browserName: "chromium",
     trace: "on-first-retry",
@@ -48,8 +48,8 @@ export default defineConfig({
   ],
   webServer: {
     command:
-      "npm run build -- --webpack && npm run start -- --hostname 127.0.0.1 --port 3000",
-    url: "http://127.0.0.1:3000/login",
+      "npm run build -- --webpack && npm run start -- --hostname localhost --port 3000",
+    url: "http://localhost:3000/login",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
