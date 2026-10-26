@@ -53,3 +53,45 @@ Supabase reference documentation: [phone/password authentication](https://supaba
 - Frontend typecheck, lint and production webpack build, Python Ruff and diff whitespace checks passed.
 
 Real carrier SMS delivery, hosted migration application and hosted deployment remain operator tasks. Timing checks used the small local three-artist fixture and are not a production load test. Browser runtime assertions narrowly exclude WebKit's documented same-origin RSC cancellation diagnostic during document replacement ([upstream issue](https://github.com/microsoft/playwright/issues/43120)); hydration failures and other runtime errors still fail the suite.
+
+### Isolated onboarding and phone sign-up checks
+
+Use `python -m scripts.auth_flow_checks prepare` to create a separate local
+Supabase project on ports 55320–55329. It copies the versioned migrations and
+seed, enables phone sign-up and confirmation only in its temporary config, and
+uses fixed OTP `123456` for reserved test numbers `+12025550191` and
+`+12025550192`. It does not enable paper execution or modify the existing local
+project. Preparation deletes only these two phone fixtures in the isolated
+project so the sign-up checks can run again. The SMS provider uses placeholder
+credentials; mapped test numbers skip SMS delivery.
+
+Start `python -m scripts.auth_flow_checks api` in another terminal. Then run:
+
+```bash
+python -m scripts.auth_flow_checks browser --project=public-phone --project=public-webkit-phone --workers=2
+```
+
+The helper passes only public configuration and dedicated test credentials to
+the frontend/browser process. The API receives its administrative key separately.
+The frontend uses port 3102 and `.next-auth-tests` to avoid the normal dev server.
+Stop the API after testing and run `python -m scripts.auth_flow_checks stop`.
+Test configuration is private and temporary; never commit it.
+
+Onboarding now stays sequential even for completed accounts. Completing or
+skipping it opens sign-up, or an explicit account choice for a verified session.
+Successful authentication uses `/auth/continue` to save anonymous completion
+through FastAPI before opening the intended destination. Failed saves offer Retry.
+Switching accounts signs out only the current session and clears anonymous
+progress. Replaying onboarding does not reset completed account progress.
+
+Fixed OTP tests do not establish carrier delivery. Before a hosted rollout,
+verify phone sign-up and confirmation are enabled, configure the SMS provider,
+and test sign-up, resend, expired/wrong codes, and successful verification on a
+real phone in staging. Follow the official [phone-auth setup](https://supabase.com/docs/guides/auth/phone-login).
+
+Validation for the onboarding handoff fix: 51 frontend unit checks, 38 public
+Chromium/WebKit flow checks, four signed-in onboarding regressions, dedicated
+account sign-in setup, and five missing-configuration checks passed. Frontend
+typecheck, lint, production webpack build, Python Ruff for the test helper, and
+diff whitespace checks passed. Phone sign-up used the isolated fixed-OTP stack;
+real carrier delivery and hosted configuration remain unverified.

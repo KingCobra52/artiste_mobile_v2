@@ -104,15 +104,26 @@ test("charts support keyboard and touch inspection", async ({ page }) => {
   await chart.locator("svg").tap();
   await expect(chart).toHaveAttribute("aria-valuetext", /share/);
 });
-test("opening the app shows onboarding even for a completed account", async ({ page }) => {
+test("opening the app shows onboarding even for a completed account", async ({
+  page,
+}) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.getByText("1 of 3", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Market", exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Market", exact: true }),
+  ).toHaveCount(0);
   await page.reload();
   await expect(page).toHaveURL(/\/onboarding$/);
-  await expect(page.getByRole("button", { name: "Get started" })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("2 of 3", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("3 of 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Get started" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Choose your account" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Continue as/ }).click();
   await expect(page).toHaveURL(/\/market$/);
 });
 
@@ -127,6 +138,10 @@ test("account session survives reload and onboarding can be replayed", async ({
     .click();
   await expect(page.getByText("1 of 3", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Skip", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Choose your account" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /^Continue as/ }).click();
   await expect(page).toHaveURL(/\/market$/);
 });
 test("product routes fit phone, tablet and desktop", async ({ page }) => {

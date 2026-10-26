@@ -22,7 +22,10 @@ setup("sign in with the dedicated test account", async ({ page }) => {
     page.waitForURL(/\/market$/),
     skip.waitFor({ state: "visible" }),
   ]);
-  if (await skip.isVisible()) await skip.click();
+  if (await skip.isVisible()) {
+    await skip.click();
+    await page.getByRole("button", { name: /^Continue as/ }).click();
+  }
   await expect(page).toHaveURL(/\/market$/);
   await page.context().storageState({ path: authFile });
 });

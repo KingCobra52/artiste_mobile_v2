@@ -1,5 +1,7 @@
 node_modules/
 .next/
+.next-auth-tests/
+.next-config-tests/
 out/
 test-results/
 playwright-report/

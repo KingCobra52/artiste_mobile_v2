@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       const destination =
         request.nextUrl.searchParams.get("recovery") === "1"
           ? "/reset-password"
-          : `/onboarding?next=${encodeURIComponent(safeNextPath(request.nextUrl.searchParams.get("next")))}`;
+          : `/auth/continue?next=${encodeURIComponent(safeNextPath(request.nextUrl.searchParams.get("next")))}`;
       return NextResponse.redirect(new URL(destination, origin));
     }
   }

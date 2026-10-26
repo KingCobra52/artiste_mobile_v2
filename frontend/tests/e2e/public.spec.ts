@@ -24,10 +24,10 @@ test("Get started opens sign up with the intended destination", async ({
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await page.getByRole("button", { name: "Get started" }).click();
-  await expect(page).toHaveURL(
-    /\/signup\?next=%2Fartists%2F4%3Ftab%3Dmusic$/,
-  );
-  await expect(page.getByRole("heading", { name: "Create your account" })).toBeVisible();
+  await expect(page).toHaveURL(/\/signup\?next=%2Fartists%2F4%3Ftab%3Dmusic$/);
+  await expect(
+    page.getByRole("heading", { name: "Create your account" }),
+  ).toBeVisible();
 });
 test("phone signup and password recovery use accessible phone inputs", async ({
   page,
@@ -62,9 +62,15 @@ test("protected routes preserve the intended destination", async ({ page }) => {
     await expect(page).toHaveURL(
       new RegExp(`/onboarding\\?next=${encodeURIComponent(path)}$`),
     );
-    await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Market", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "Portfolio", exact: true })).toHaveCount(0);
+    await expect(
+      page.getByRole("navigation", { name: "Primary navigation" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Market", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Portfolio", exact: true }),
+    ).toHaveCount(0);
   }
 });
 test("auth pages fit small phones without horizontal overflow", async ({
@@ -179,3 +185,31 @@ test("authentication remains usable with enlarged phone text", async ({
     ).toBeLessThanOrEqual(geometry.width);
   }
 });
+
+for (const stored of [
+  JSON.stringify({ version: 1, step: 2, completed: true }),
+  "broken",
+  JSON.stringify({ version: 1, step: "oops", completed: false }),
+  JSON.stringify({ version: 99, step: 2, completed: true }),
+]) {
+  test(`onboarding remains sequential with stored progress ${stored}`, async ({
+    page,
+  }) => {
+    await page.addInitScript(
+      (value) => localStorage.setItem("artiste:onboarding:v1", value),
+      stored,
+    );
+    await page.goto("/onboarding");
+    await expect(page.getByText("1 of 3", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByText("2 of 3", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await expect(page.getByText("3 of 3", { exact: true })).toBeVisible();
+    await page
+      .getByRole("button", { name: "Get started", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Create your account" }),
+    ).toBeVisible();
+  });
+}

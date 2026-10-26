@@ -20,6 +20,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
+      ARTISTE_NEXT_DIST_DIR: ".next-config-tests",
       NEXT_PUBLIC_SUPABASE_URL: "",
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "",
     },

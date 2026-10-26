@@ -58,7 +58,7 @@ export async function login(
       error,
     );
   redirect(
-    `/onboarding?next=${encodeURIComponent(safeNextPath(form.get("next")))}`,
+    `/auth/continue?next=${encodeURIComponent(safeNextPath(form.get("next")))}`,
   );
 }
 export async function signup(
@@ -122,7 +122,7 @@ export async function verifyPhone(
     };
   }
   redirect(
-    `/onboarding?next=${encodeURIComponent(safeNextPath(form.get("next")))}`,
+    `/auth/continue?next=${encodeURIComponent(safeNextPath(form.get("next")))}`,
   );
 }
 export async function resendVerification(
@@ -284,4 +284,28 @@ export async function logout() {
   const client = await createClient();
   if (client) await client.auth.signOut();
   redirect("/onboarding");
+}
+
+export async function switchAccount(
+  target: "login" | "signup",
+  destination: string,
+): Promise<{
+  destination?: string;
+  error?: string;
+}> {
+  const next = safeNextPath(destination);
+  if (target !== "login" && target !== "signup")
+    return { error: "Choose an account option." };
+  try {
+    const client = await createClient();
+    if (!client) return { error: "Authentication is not configured." };
+    const { error } = await client.auth.signOut({ scope: "local" });
+    if (error)
+      return {
+        error: "We could not sign out of this session. Please try again.",
+      };
+    return { destination: `/${target}?next=${encodeURIComponent(next)}` };
+  } catch {
+    return { error: "We could not reach the service. Please try again." };
+  }
 }

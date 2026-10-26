@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { AccountChoice } from "@/components/auth/account-choice";
+import { createClient } from "@/lib/supabase/server";
+import { isVerifiedUser } from "@/lib/supabase/verified-user";
+import { redirect } from "next/navigation";
 import { AuthPage } from "@/components/auth/auth-page";
 import { SignUpForm } from "@/components/auth/signup-form";
 import { safeNextPath } from "@/lib/navigation";
@@ -10,6 +14,24 @@ export default async function SignupPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const next = safeNextPath((await searchParams).next);
+  const client = await createClient();
+  const result = client ? await client.auth.getUser() : null;
+  const user = !result?.error ? result?.data.user : null;
+  if (user && !isVerifiedUser(user))
+    redirect(`/login?verify=1&next=${encodeURIComponent(next)}`);
+  if (user && isVerifiedUser(user)) {
+    const account = user.phone
+      ? `•••• ${user.phone.slice(-4)}`
+      : `${user.email?.slice(0, 1) ?? ""}•••@${user.email?.split("@")[1] ?? "your account"}`;
+    return (
+      <AuthPage
+        title="Choose your account"
+        description="Continue with your signed-in account, or choose another account."
+      >
+        <AccountChoice account={account} nextPath={next} />
+      </AuthPage>
+    );
+  }
   return (
     <AuthPage
       title="Create your account"

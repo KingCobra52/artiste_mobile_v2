@@ -4,15 +4,29 @@ import { Icon } from "@/components/ui/icon";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveOnboarding, type OnboardingState } from "@/actions/onboarding";
-const KEY = "artiste:onboarding:v1";
+import { saveOnboarding } from "@/actions/onboarding";
+import {
+  ONBOARDING_KEY,
+  clearOnboarding,
+  parseOnboarding,
+  type OnboardingState,
+} from "@/lib/onboarding";
+
+async function persistProgress(value: OnboardingState): Promise<boolean> {
+  try {
+    return await saveOnboarding(value);
+  } catch {
+    return false;
+  }
+}
+
 function subscribe(callback: () => void) {
   window.addEventListener("storage", callback);
   return () => window.removeEventListener("storage", callback);
 }
 function snapshot() {
   try {
-    return localStorage.getItem(KEY);
+    return localStorage.getItem(ONBOARDING_KEY);
   } catch {
     return null;
   }
@@ -54,30 +68,17 @@ export function OnboardingFlow({
   const raw = useSyncExternalStore(subscribe, snapshot, () => null);
   const [chosen, setChosen] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [retry, setRetry] = useState<"move" | "finish">("move");
   const [pending, start] = useTransition();
   const router = useRouter();
-  let local: OnboardingState | null = null;
-  try {
-    local = raw ? JSON.parse(raw) : null;
-  } catch {
-    /* Ignore damaged browser storage. */
-  }
+  const local = authenticated ? null : parseOnboarding(raw);
+  const progress = authenticated ? parseOnboarding(state) : local;
   const step =
-    chosen ??
-    (replay
-      ? 0
-      : state?.completed
-        ? 0
-        : Math.max(
-            0,
-            Math.min(2, (state?.version === 1 ? state.step : local?.step) ?? 0),
-          ));
-  const seen =
-    !replay &&
-    (state?.completed || ((!state || state.version === 0) && local?.completed));
+    chosen ?? (replay || progress?.completed ? 0 : (progress?.step ?? 0));
+  const seen = !replay && progress?.completed;
   function remember(value: OnboardingState) {
     try {
-      localStorage.setItem(KEY, JSON.stringify(value));
+      localStorage.setItem(ONBOARDING_KEY, JSON.stringify(value));
     } catch {
       /* Account progress still saves through FastAPI. */
     }
@@ -85,31 +86,35 @@ export function OnboardingFlow({
   function move(value: number) {
     setChosen(value);
     const next = { version: 1, step: value, completed: false };
-    remember(next);
-    if (authenticated && !replay)
+    setError("");
+    if (!authenticated) remember(next);
+    if (authenticated && !replay && !state?.completed)
       start(async () => {
-        if (!(await saveOnboarding(next)))
+        if (!(await persistProgress(next))) {
+          setRetry("move");
           setError(
             "Progress could not be saved to your account. You can retry or keep reading.",
           );
+        }
       });
   }
   function finish() {
     const next = { version: 1, step, completed: true };
-    remember(next);
+    setError("");
+    if (!authenticated) remember(next);
     start(async () => {
-      if (authenticated && !(await saveOnboarding(next))) {
+      if (authenticated && !(await persistProgress(next))) {
+        setRetry("finish");
         setError(
           "We could not save onboarding. Try again when the service is available.",
         );
         return;
       }
+      if (authenticated) clearOnboarding();
       router.replace(
-        authenticated
-          ? nextPath
-          : needsVerification
-            ? `/login?verify=1&next=${encodeURIComponent(nextPath)}`
-            : `/signup?next=${encodeURIComponent(nextPath)}`,
+        needsVerification
+          ? `/login?verify=1&next=${encodeURIComponent(nextPath)}`
+          : `/signup?next=${encodeURIComponent(nextPath)}`,
       );
     });
   }
@@ -148,9 +153,16 @@ export function OnboardingFlow({
             </p>
           )}
           {error && (
-            <p role="alert" className="notice mt-4">
-              {error}
-            </p>
+            <div className="notice mt-4">
+              <p role="alert">{error}</p>
+              <button
+                className="action-secondary mt-4"
+                disabled={pending}
+                onClick={() => (retry === "finish" ? finish() : move(step))}
+              >
+                Retry
+              </button>
+            </div>
           )}
         </div>
         <aside className="onboarding-example" key={step}>
@@ -211,9 +223,9 @@ export function OnboardingFlow({
           <button
             className="action-primary"
             disabled={pending || !hydrated}
-            onClick={() => (step === 2 || seen ? finish() : move(step + 1))}
+            onClick={() => (step === 2 ? finish() : move(step + 1))}
           >
-            {pending ? "Saving…" : step === 2 || seen ? "Get started" : "Next"}
+            {pending ? "Saving…" : step === 2 ? "Get started" : "Next"}
             <Icon name="arrow" />
           </button>
         </div>

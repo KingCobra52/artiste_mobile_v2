@@ -84,3 +84,34 @@ jobs:
           name: phone-browser-failures
           path: frontend/test-results/artifacts/
           retention-days: 7
+
+  auth-flow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: npm ci
+      - run: npm ci --prefix frontend
+      - run: pip install -r requirements.txt
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: frontend
+      - name: Prepare isolated phone auth fixtures
+        run: python -m scripts.auth_flow_checks prepare
+      - name: Start isolated API
+        run: python -m scripts.auth_flow_checks api > /tmp/artiste-auth-api.log 2>&1 &
+      - name: Check onboarding and account entry
+        run: python -m scripts.auth_flow_checks browser --project=public-phone --project=public-webkit-phone --workers=2
+      - name: Stop isolated auth stack
+        if: always()
+        run: python -m scripts.auth_flow_checks stop

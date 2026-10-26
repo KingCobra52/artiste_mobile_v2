@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({
   },
 }));
 import {
+  switchAccount,
   signup,
   login,
   verifyPhone,
@@ -71,7 +72,7 @@ describe("phone authentication", () => {
     await expect(
       login({ error: null }, form({ next: "/artists/16?range=month" })),
     ).rejects.toThrow(
-      "REDIRECT:/onboarding?next=%2Fartists%2F16%3Frange%3Dmonth",
+      "REDIRECT:/auth/continue?next=%2Fartists%2F16%3Frange%3Dmonth",
     );
   });
   it("retains login for existing email accounts", async () => {
@@ -174,4 +175,39 @@ describe("redirect normalization", () => {
     expect(safeNextPath("/artists/16?range=month#history")).toBe(
       "/artists/16?range=month#history",
     ));
+});
+
+describe("account switching", () => {
+  it("signs out only the current session and keeps the destination", async () => {
+    expect(await switchAccount("login", "/portfolio")).toEqual({
+      destination: "/login?next=%2Fportfolio",
+    });
+    expect(auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+  });
+  it("keeps sign-out failures on the account choice screen", async () => {
+    auth.signOut.mockResolvedValue({ error: { status: 500 } });
+    const result = await switchAccount("signup", "/portfolio");
+    expect(result.error).toContain("try again");
+    expect(result.destination).toBeUndefined();
+  });
+  it("uses the handoff after phone verification", async () => {
+    await expect(
+      verifyPhone({ error: null }, form({ next: "/portfolio" })),
+    ).rejects.toThrow("REDIRECT:/auth/continue?next=%2Fportfolio");
+  });
+});
+
+describe("phone verification failures", () => {
+  it.each(["expired", "incorrect", "already used"])(
+    "keeps an %s OTP on verification",
+    async (message) => {
+      auth.verifyOtp.mockResolvedValue({
+        data: { user: null },
+        error: { message, status: 403 },
+      });
+      const result = await verifyPhone({ error: null }, form());
+      expect(result.error).toContain("incorrect, expired or already used");
+      expect(result.stage).not.toBe("done");
+    },
+  );
 });

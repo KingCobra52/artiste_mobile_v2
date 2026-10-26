@@ -3,6 +3,9 @@ import { loadEnvConfig } from "@next/env";
 
 loadEnvConfig(process.cwd());
 
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const port = new URL(baseURL).port || "3000";
+
 const authFile = "test-results/.auth/user.json";
 
 export default defineConfig({
@@ -13,7 +16,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   outputDir: "test-results/artifacts",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     ...devices["iPhone 13"],
     browserName: "chromium",
     trace: "on-first-retry",
@@ -22,7 +25,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "public-phone",
-      testMatch: /public\.spec\.ts/,
+      testMatch: /(?:public|auth-handoff)\.spec\.ts/,
       use: { storageState: { cookies: [], origins: [] } },
     },
     {
@@ -33,7 +36,7 @@ export default defineConfig({
     },
     {
       name: "public-webkit-phone",
-      testMatch: /public\.spec\.ts/,
+      testMatch: /(?:public|auth-handoff)\.spec\.ts/,
       use: {
         browserName: "webkit",
         storageState: { cookies: [], origins: [] },
@@ -47,9 +50,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command:
-      "npm run build -- --webpack && npm run start -- --hostname localhost --port 3000",
-    url: "http://localhost:3000/login",
+    command: `npm run build -- --webpack && npm run start -- --hostname localhost --port ${port}`,
+    url: `${baseURL}/login`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
