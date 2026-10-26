@@ -72,6 +72,17 @@ for artist_id in (4, 16, 17):
             on_conflict="artist_id,track_key,date",
         ).execute()
 publish_anchors(client)
+# Exercise a basic stale artist page and a searchable artist without a quote.
+client.rpc(
+    "publish_artist_anchor",
+    {
+        "p_artist_id": 2,
+        "p_raw": 1000,
+        "p_as_of": (now - timedelta(hours=49)).isoformat(),
+        "p_sources": {},
+        "p_initial": 1000,
+    },
+).execute()
 for account in credentials:
     positions = (
         client.table("paper_positions")

@@ -129,7 +129,7 @@ async def test_repository_retains_artists_after_first_thousand_rows():
 
 
 @pytest.mark.anyio
-async def test_only_complete_active_fresh_artists_are_discoverable():
+async def test_active_artists_are_searchable_without_context_or_fresh_quotes():
     good = Artist(
         id="1",
         name="Artist",
@@ -147,6 +147,9 @@ async def test_only_complete_active_fresh_artists_are_discoverable():
                 good.model_copy(update={"id": "2", "active": False}),
                 good.model_copy(update={"id": "3", "biography": ""}),
                 good.model_copy(update={"id": "4"}),
+                good.model_copy(
+                    update={"id": "5", "biography": "", "music_context": "", "listening_url": ""}
+                ),
             ]
 
     class Quotes:
@@ -162,7 +165,12 @@ async def test_only_complete_active_fresh_artists_are_discoverable():
                 for i in range(1, 5)
             ]
 
-    assert [a.id for a in await MarketService(Artists(), Quotes()).list_artists()] == ["1"]
+    assert [a.id for a in await MarketService(Artists(), Quotes()).list_artists()] == [
+        "1",
+        "3",
+        "4",
+        "5",
+    ]
 
 
 @pytest.mark.anyio
@@ -234,3 +242,53 @@ def test_source_baselines_are_independent_of_other_sources_growth():
         now=NOW,
     )
     assert quote["price_cents"] == 1030
+
+
+@pytest.mark.anyio
+async def test_published_stale_quote_survives_missing_observations():
+    from datetime import datetime, timezone
+
+    source_time = (datetime.now(timezone.utc) - timedelta(hours=49)).isoformat()
+    state = {
+        "artist_id": 2,
+        "source_as_of": source_time,
+        "price_cents": 1000,
+        "version": 3,
+        "priced_at": source_time,
+        "anchor_cents": 1000,
+        "demand_percent": 0,
+    }
+
+    class Client:
+        def rpc(self, name):
+            return Query([])
+
+        def table(self, name):
+            return Query([state])
+
+    quotes = await SupabaseSnapshotsRepository(Client()).list_quotes()
+    assert len(quotes) == 1
+    assert quotes[0].status == "stale"
+    assert quotes[0].price_cents == 1000
+    assert quotes[0].as_of.isoformat() == source_time
+    assert quotes[0].quote_version == "3"
+
+
+@pytest.mark.anyio
+async def test_catalog_paginates_all_artists():
+    from backend.app.repositories.artists import SupabaseArtistsRepository
+
+    class ArtistQuery(Query):
+        def order(self, *args):
+            return self
+
+    query = ArtistQuery([{"id": i, "name": f"Artist {i}"} for i in range(1, 1202)])
+
+    class Client:
+        def table(self, name):
+            return query
+
+    artists = await SupabaseArtistsRepository(Client()).list()
+    assert len(artists) == 1201
+    assert artists[-1].id == "1201"
+    assert query.calls == [(0, 499), (500, 999), (1000, 1499)]

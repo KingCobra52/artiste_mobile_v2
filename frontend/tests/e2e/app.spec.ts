@@ -24,7 +24,7 @@ test.afterEach(async ({ page }) => {
     "browser runtime and hydration errors",
   ).toEqual([]);
 });
-test("Market shows only supported artists and search works", async ({
+test("Market shows quoted artists and search works", async ({
   page,
 }) => {
   await page.goto("/market");
@@ -274,4 +274,22 @@ test("trade review receives focus and clears when the order is revised", async (
   await expect(
     page.getByRole("button", { name: "Review estimate", exact: true }),
   ).toBeEnabled();
+});
+
+
+test("stale artists stay visible and artists without quotes are searchable", async ({ page }) => {
+  await page.goto("/market");
+  const stale = page.getByRole("link", { name: /Travis Scott/ });
+  await expect(stale).toBeVisible();
+  await expect(stale).toContainText("Stale");
+  await expect(page.getByRole("link", { name: /Future/ })).toHaveCount(0);
+  await page.getByRole("searchbox").fill("Future");
+  await page.getByRole("link", { name: /Future/ }).click();
+  await expect(page.getByRole("heading", { name: "Future", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review estimate", exact: true })).toBeDisabled();
+  await page.goto("/artists/2");
+  await expect(page.getByText("This artist’s biography is awaiting review.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Review estimate", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "sell", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Review estimate", exact: true })).toBeDisabled();
 });

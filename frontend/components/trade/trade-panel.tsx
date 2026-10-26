@@ -175,8 +175,7 @@ export function TradePanel({
           <p role="status" className="notice">
             <Icon name="clock" />
             <span>
-              A supported artist and a fresh, published quote are required.
-              Trading is unavailable.
+              Trading requires an active artist and a fresh, published quote.
             </span>
           </p>
         )}

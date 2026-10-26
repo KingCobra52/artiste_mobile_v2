@@ -21,11 +21,18 @@ export function MarketList({
     () =>
       artists.filter(
         (artist) =>
-          !normalized ||
-          artist.name.toLocaleLowerCase().includes(normalized) ||
-          artist.symbol.toLocaleLowerCase().includes(normalized),
+          normalized
+            ? artist.name.toLocaleLowerCase().includes(normalized) ||
+              artist.symbol.toLocaleLowerCase().includes(normalized)
+            : quotes.some(
+                (quote) =>
+                  quote.artistId === artist.id &&
+                  quote.priceCents != null &&
+                  quote.quoteVersion != null &&
+                  (quote.status === "fresh" || quote.status === "stale"),
+              ),
       ),
-    [artists, normalized],
+    [artists, normalized, quotes],
   );
   return (
     <div>
@@ -62,7 +69,9 @@ export function MarketList({
       {!filtered.length ? (
         <div className="state-panel">
           <h2>No artists found</h2>
-          <p>Try another name or symbol in the supported catalog.</p>
+          <p>
+            Search by name or symbol to find artists, including those awaiting quotes.
+          </p>
         </div>
       ) : (
         <div className="artist-grid">
@@ -107,7 +116,13 @@ export function MarketList({
                 </div>
                 <div className="artist-card-footer">
                   <div>
-                    <QuoteStatus status={quote?.status ?? "unavailable"} />
+                    {quote?.quoteVersion ? (
+                      <QuoteStatus status={quote.status} />
+                    ) : (
+                      <span className="quote-status status-unavailable">
+                        Awaiting published quote
+                      </span>
+                    )}
                     <p className="small-copy mt-1">
                       Data {formatDate(quote?.asOf ?? null)}
                     </p>

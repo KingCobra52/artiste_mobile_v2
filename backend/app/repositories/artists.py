@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from backend.app.repositories.snapshots import all_rows
 from backend.app.schemas.artist import Artist
 from supabase import AsyncClient
 
@@ -45,8 +46,8 @@ class SupabaseArtistsRepository:
         )
 
     async def list(self) -> list[Artist]:
-        response = await self.client.table("artists").select("*").order("name").execute()
-        return [self._artist(row) for row in response.data or []]
+        rows = await all_rows(self.client.table("artists").select("*").order("name").order("id"))
+        return [self._artist(row) for row in rows]
 
     async def get(self, artist_id: str) -> Artist | None:
         if not artist_id.isdecimal() or int(artist_id) > 2147483647:

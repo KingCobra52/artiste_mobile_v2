@@ -25,8 +25,4 @@ class Artist(BaseModel):
 
     @property
     def supported(self) -> bool:
-        return self.active and bool(
-            self.biography.strip()
-            and self.music_context.strip()
-            and self.listening_url.startswith("https://")
-        )
+        return self.active

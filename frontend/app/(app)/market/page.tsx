@@ -41,7 +41,7 @@ export default async function MarketPage() {
         <MarketList artists={artists} quotes={quotes} />
       ) : (
         <EmptyState title="No artists to explore right now">
-          Artists appear here when their context and quotes are ready. Check
+          Artists appear here when they are added to the catalog. Check
           back after the next data update.
         </EmptyState>
       )}

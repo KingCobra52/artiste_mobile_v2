@@ -37,8 +37,8 @@ class SupabaseSnapshotsRepository:
             for row in await all_rows(self.client.table("artist_market_state").select("*"))
         }
         quotes = []
-        for artist_id, rows in grouped.items():
-            calculated = audience_quote(rows)
+        for artist_id in sorted(grouped.keys() | states.keys()):
+            calculated = audience_quote(grouped.get(artist_id, []))
             calculated.pop("matched_tracks")
             state = states.get(artist_id)
             if (
