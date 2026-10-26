@@ -7,7 +7,7 @@ export const metadata = { title: "Sign in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string; reset?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; reset?: string; verify?: string }>;
 }) {
   const params = await searchParams;
   const next = safeNextPath(params.next);
@@ -19,6 +19,12 @@ export default async function LoginPage({
       {params.error && (
         <p role="alert" className="mt-3 text-danger">
           We could not finish authentication. Please try again.
+        </p>
+      )}
+      {params.verify && (
+        <p role="status" className="mt-3 text-accent">
+          Verify your account before entering the market. Use the verification
+          option below if you need another code.
         </p>
       )}
       {params.reset && (

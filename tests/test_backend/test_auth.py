@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -13,14 +14,20 @@ class ClaimsResponse:
 
 
 class FakeAuth:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, user=None):
         self.result = result
         self.error = error
+        self.user = user
 
     async def get_claims(self, token):
         if self.error:
             raise self.error
         return self.result
+
+    async def get_user(self, token):
+        if self.error:
+            raise self.error
+        return SimpleNamespace(user=self.user)
 
 
 class FakeClient:
@@ -31,7 +38,17 @@ class FakeClient:
 @pytest.mark.anyio
 async def test_verify_access_token_returns_typed_user():
     user_id = UUID("12345678-1234-5678-1234-567812345678")
-    client = FakeClient(FakeAuth(ClaimsResponse({"sub": str(user_id)})))
+    client = FakeClient(
+        FakeAuth(
+            ClaimsResponse({"sub": str(user_id)}),
+            user=SimpleNamespace(
+                id=user_id,
+                email_confirmed_at="2026-01-01",
+                phone_confirmed_at=None,
+                is_anonymous=False,
+            ),
+        )
+    )
 
     user = await verify_access_token(client, "valid-token")
 
@@ -41,11 +58,47 @@ async def test_verify_access_token_returns_typed_user():
 @pytest.mark.anyio
 async def test_verify_access_token_accepts_sdk_claims_dictionary():
     user_id = UUID("12345678-1234-5678-1234-567812345678")
-    client = FakeClient(FakeAuth({"claims": {"sub": str(user_id)}}))
+    client = FakeClient(
+        FakeAuth(
+            {"claims": {"sub": str(user_id)}},
+            user=SimpleNamespace(
+                id=user_id,
+                email_confirmed_at=None,
+                phone_confirmed_at="2026-01-01",
+                is_anonymous=False,
+            ),
+        )
+    )
 
     user = await verify_access_token(client, "valid-token")
 
     assert user.id == user_id
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "confirmed,anonymous",
+    [(False, False), (True, True)],
+)
+async def test_verify_access_token_rejects_unverified_accounts(confirmed, anonymous):
+    user_id = UUID("12345678-1234-5678-1234-567812345678")
+    client = FakeClient(
+        FakeAuth(
+            ClaimsResponse({"sub": str(user_id)}),
+            user=SimpleNamespace(
+                id=user_id,
+                email_confirmed_at="2026-01-01" if confirmed else None,
+                phone_confirmed_at=None,
+                is_anonymous=anonymous,
+            ),
+        )
+    )
+
+    with pytest.raises(AppError) as caught:
+        await verify_access_token(client, "valid-token")
+
+    assert caught.value.status_code == 403
+    assert caught.value.code == "account_unverified"
 
 
 @pytest.mark.anyio

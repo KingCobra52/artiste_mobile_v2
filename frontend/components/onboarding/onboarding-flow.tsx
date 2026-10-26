@@ -40,11 +40,13 @@ const screens = [
 export function OnboardingFlow({
   state,
   authenticated,
+  needsVerification,
   replay,
   nextPath,
 }: {
   state: OnboardingState | null;
   authenticated: boolean;
+  needsVerification: boolean;
   replay: boolean;
   nextPath: string;
 }) {
@@ -105,7 +107,9 @@ export function OnboardingFlow({
       router.replace(
         authenticated
           ? nextPath
-          : `/login?next=${encodeURIComponent(nextPath)}`,
+          : needsVerification
+            ? `/login?verify=1&next=${encodeURIComponent(nextPath)}`
+            : `/signup?next=${encodeURIComponent(nextPath)}`,
       );
     });
   }

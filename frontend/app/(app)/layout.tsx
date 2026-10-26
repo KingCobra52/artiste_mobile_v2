@@ -6,6 +6,7 @@ import { BottomNavigation } from "@/components/navigation/bottom-navigation";
 import { ConfigurationNotice } from "@/components/ui/configuration-notice";
 import { getSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import { isVerifiedUser } from "@/lib/supabase/verified-user";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,9 @@ export default async function ProtectedLayout({
   if (!getSupabaseConfig().configured) return <ConfigurationNotice />;
 
   const supabase = await createClient();
-  const { data, error } = await supabase!.auth.getClaims();
-  if (error || !data?.claims) redirect("/login");
+  const { data, error } = await supabase!.auth.getUser();
+  if (error || !data.user) redirect("/login");
+  if (!isVerifiedUser(data.user)) redirect("/login?verify=1");
 
   let required = false;
   try {
