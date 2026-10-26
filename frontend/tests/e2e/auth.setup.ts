@@ -17,7 +17,7 @@ setup("sign in with the dedicated test account", async ({ page }) => {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();
   const skip = page.getByRole("button", { name: "Skip", exact: true });
-  // Completed accounts can pass through /onboarding before its server redirect.
+  // Continue explicitly from onboarding, including for completed accounts.
   await Promise.race([
     page.waitForURL(/\/market$/),
     skip.waitFor({ state: "visible" }),

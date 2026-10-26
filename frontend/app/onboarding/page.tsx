@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseConfig } from "@/lib/supabase/config";
@@ -29,7 +28,6 @@ export default async function OnboardingPage({
       /* Show onboarding with retry if the API is unavailable. */
     }
   }
-  if (state?.completed && !params.replay) redirect(next);
   return (
     <OnboardingFlow
       key={params.replay ? "replay" : "start"}
