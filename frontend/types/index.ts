@@ -25,10 +25,7 @@ export interface MarketQuote {
   pricingVersion?: string;
   demandPercent?: number;
   externalAnchorCents?: number | null;
-  sources?: Record<
-    string,
-    { asOf?: string; elapsedDays?: number; matchedTracks?: number }
-  >;
+  sources?: Record<string, unknown>;
 }
 
 export interface TradeDraft {

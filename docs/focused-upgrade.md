@@ -2,20 +2,19 @@
 
 Artiste remains a Next.js → FastAPI → Supabase paper-trading application. Application tables stay behind FastAPI. Supabase Auth creates and refreshes user sessions. No agent, agent simulation, real-money feature, or CAPTCHA is included.
 
-`docs/pricing-model.md` documents the live `audience-inventory-v2` quote and the
-separate `performance-index-shadow-v1` comparison series. The shadow series is
-written by ingestion to `pricing_shadow_quotes`; it is not used for quotes or
-trade execution. Keep pricing execution disabled while reviewing its coverage
-and results.
+`docs/pricing-model.md` documents the `performance-index-v2` quote path and the
+`audience-inventory-v2` fallback. Ingestion keeps the diagnostic series in
+`pricing_shadow_quotes`; fresh results with confidence of at least 0.30 now
+publish to live quote anchors while preserving the current price at cutover.
 
 ## Deployment sequence
 
-1. Back up the database and replay committed migrations in a staging project. The four `20261024*` migrations contain the catalog, pricing engine, cost-basis migration, onboarding state and ingestion reporting. Do not change hosted tables manually as a substitute for migrations.
+1. Back up the database and replay committed migrations in a staging project. Do not change hosted tables manually as a substitute for migrations.
 2. Configure FastAPI with its server-only Supabase URL and secret key. Configure Next.js with `ARTISTE_API_URL`, public Supabase URL/key and `NEXT_PUBLIC_SITE_URL`. Never put an administrative key in a `NEXT_PUBLIC_` variable.
 3. Configure phone Auth in the hosted Supabase dashboard: enable phone signup/confirmation, select Twilio, supply the account SID, message service SID/sender and Auth token. Restrict permitted destinations and apply provider spending limits. Match the 60-second resend interval, six-digit code and server-side SMS rate limits in `supabase/config.toml`. Retain email login and password recovery, site URL and callback allowlist for existing accounts. Account UUIDs and holdings are preserved when adding a verified phone.
 4. Verify real SMS signup, resend, delivery errors, login, password recovery and existing-account phone attachment in staging. Local unit tests validate SDK calls and error handling; they cannot prove carrier delivery. No SMS credentials are committed or configured by this change.
 5. Run ingestion against the migrated staging project. Confirm that both sources publish valid anchors and ingestion reports are stored. Verify that the curated artists have fresh published quotes before inviting users.
-6. Keep `pricing_controls.enabled = false` during review. Previews show the curve and fees, but execution fails closed. Only after the execution, concurrency, rounding and pricing checks pass should an operator enable this flag in the intended paper-trading environment. The local fixture helper enables it only in the disposable localhost database.
+6. Confirm fresh quotes, transition continuity, and provenance in the intended environment. Trade execution is an independent gate: leave `pricing_controls.enabled = false` until the trade, concurrency, rounding, and pricing checks pass, then enable it only for the intended paper-trading environment. The local fixture helper enables it only in the disposable localhost database.
 
 ## Product and data rules
 

@@ -152,9 +152,12 @@ export default async function ArtistPage({
               0.10% fee. Only fresh published quotes can be traded.
             </p>
             <p>
-              Source growth is measured per elapsed day, not a guaranteed
-              24-hour price return. A separate performance-index model is being
-              evaluated in shadow mode and does not determine this quote.
+              When reliable matched streaming and video observations are
+              available, the performance-index model sets the audience anchor.
+              Otherwise, the established audience model remains in use. The
+              displayed daily change is the model’s latest measured daily
+              movement; it is not a guaranteed return. Platform trading still
+              changes execution prices along the bounded market curve.
             </p>
             <p className="small-copy">
               Pricing method: {quote.pricingVersion ?? "Unavailable"}

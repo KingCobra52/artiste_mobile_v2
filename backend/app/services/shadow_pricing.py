@@ -1,4 +1,4 @@
-"""Experimental performance index, published for comparison only."""
+"""Confidence-weighted artist performance index used by shadow and quote paths."""
 
 from __future__ import annotations
 
@@ -82,6 +82,7 @@ def _youtube_metrics(current, previous):
 def _source_state():
     return {
         "log_return": 0.0,
+        "latest_daily_log_return": 0.0,
         "updates": 0,
         "matched_entities": 0,
         "confidence_total": 0.0,
@@ -103,6 +104,7 @@ def _add_interval(state, ratio, matched_entities, elapsed_days, day):
     cap_confidence = 0.5 if capped else 1.0
     interval_confidence = sample_confidence * gap_confidence * cap_confidence
     state["log_return"] += daily_log_growth * elapsed_days * interval_confidence
+    state["latest_daily_log_return"] = daily_log_growth * interval_confidence
     state["updates"] += 1
     state["matched_entities"] = max(state["matched_entities"], matched_entities)
     state["confidence_total"] += interval_confidence
@@ -117,10 +119,10 @@ def _reset_source_after_gap(state):
 
 
 def performance_shadow_quote(rows: list[dict], *, now: datetime | None = None) -> dict:
-    """Build a confidence-weighted index from recent matched cohorts.
+    """Build a confidence-weighted index and its latest daily movement.
 
-    This function is shadow-only. Missing/stale sources contribute neutral
-    log-return, so adding or losing a source cannot rescale another source.
+    Missing/stale sources contribute neutral log-return, so adding or losing a
+    source cannot rescale another source.
     """
     current_time = utc_now(now)
     ordered = []
@@ -257,6 +259,9 @@ def performance_shadow_quote(rows: list[dict], *, now: datetime | None = None) -
             "matchedEntities": state["matched_entities"],
             "confidence": round(state["confidence"], 4),
             "confidenceWeightedLogReturn": round(state["log_return"], 8),
+            "latestDailyConfidenceWeightedLogReturn": round(
+                state["latest_daily_log_return"], 8
+            ),
             "cappedIntervals": state["capped_intervals"],
             "longGaps": state["long_gaps"],
             "listenerGrowthDiagnostics": len(state["listener_ratios"]),
@@ -268,6 +273,22 @@ def performance_shadow_quote(rows: list[dict], *, now: datetime | None = None) -
     )
     return {
         "performance_index_cents": index_cents,
+        "change_percent": (
+            round(
+                (math.exp(
+                    sum(
+                        SOURCE_WEIGHTS[source]
+                        * states[source]["latest_daily_log_return"]
+                        for source in fresh_sources
+                    )
+                )
+                - 1)
+                * 100,
+                4,
+            )
+            if status == "fresh"
+            else None
+        ),
         "status": status,
         "source_as_of": as_of,
         "confidence": round(confidence, 4),

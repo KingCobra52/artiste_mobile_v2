@@ -54,7 +54,14 @@ class SupabaseSnapshotsRepository:
                     priced_at=state["priced_at"],
                     external_anchor_cents=round(float(state["anchor_cents"])),
                     demand_percent=float(state["demand_percent"]),
+                    pricing_version=state.get("pricing_version", calculated["pricing_version"]),
+                    sources=state.get("sources") or calculated["sources"],
                 )
+                if state.get("pricing_version") == "performance-index-v2":
+                    source_change = (state.get("sources") or {}).get("change_percent")
+                    calculated["change_percent"] = (
+                        float(source_change) if source_change is not None else None
+                    )
                 from backend.app.services.pricing import FRESHNESS_WINDOW
 
                 calculated["status"] = (

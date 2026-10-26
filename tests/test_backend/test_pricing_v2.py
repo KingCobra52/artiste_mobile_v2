@@ -275,6 +275,34 @@ async def test_published_stale_quote_survives_missing_observations():
 
 
 @pytest.mark.anyio
+async def test_performance_quote_uses_published_model_and_daily_change():
+    source_time = datetime.now(timezone.utc).isoformat()
+    state = {
+        "artist_id": 2,
+        "source_as_of": source_time,
+        "price_cents": 1050,
+        "version": 4,
+        "priced_at": source_time,
+        "anchor_cents": 1050,
+        "demand_percent": 0,
+        "pricing_version": "performance-index-v2",
+        "sources": {"change_percent": 0.7, "model_version": "performance-index-shadow-v2"},
+    }
+
+    class Client:
+        def rpc(self, name):
+            return Query([])
+
+        def table(self, name):
+            return Query([state])
+
+    quote = (await SupabaseSnapshotsRepository(Client()).list_quotes())[0]
+    assert quote.pricing_version == "performance-index-v2"
+    assert quote.change_percent == 0.7
+    assert quote.sources["model_version"] == "performance-index-shadow-v2"
+
+
+@pytest.mark.anyio
 async def test_catalog_paginates_all_artists():
     from backend.app.repositories.artists import SupabaseArtistsRepository
 

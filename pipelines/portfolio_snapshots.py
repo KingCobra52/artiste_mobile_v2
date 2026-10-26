@@ -8,6 +8,9 @@ from backend.app.services.legacy_pricing import calculate_quote as legacy_quote
 from backend.app.services.pricing import audience_quote, utc_now
 from backend.app.services.shadow_pricing import performance_shadow_quote
 
+LIVE_PERFORMANCE_PRICING_VERSION = "performance-index-v2"
+MIN_LIVE_PERFORMANCE_CONFIDENCE = 0.3
+
 
 def _shadow_calculation_hash(rows: list[dict], result: dict) -> str:
     payload = {
@@ -15,6 +18,7 @@ def _shadow_calculation_hash(rows: list[dict], result: dict) -> str:
         "result": {
             "index": result["performance_index_cents"],
             "status": result["status"],
+            "change_percent": result.get("change_percent"),
             "source_as_of": (
                 result["source_as_of"].isoformat() if result["source_as_of"] else None
             ),
@@ -38,7 +42,7 @@ def _all_rows(query) -> list[dict]:
         offset += 500
 
 
-def _publish_shadow_quotes(client) -> int:
+def _publish_shadow_quotes(client) -> dict[int, dict] | None:
     """Write diagnostics without allowing shadow failures to block live quotes."""
     try:
         shadow_rows = {}
@@ -54,10 +58,11 @@ def _publish_shadow_quotes(client) -> int:
             client.table("artists").select("id").eq("active", True).order("id")
         )
         artist_ids = {int(row["id"]) for row in active_artists} | set(shadow_rows)
-        written = 0
+        results = {}
         for artist_id in sorted(artist_ids):
             rows = shadow_rows.get(artist_id, [])
             shadow = performance_shadow_quote(rows)
+            results[artist_id] = shadow
             calculation_hash = _shadow_calculation_hash(rows, shadow)
             client.table("pricing_shadow_quotes").upsert(
                 {
@@ -72,17 +77,20 @@ def _publish_shadow_quotes(client) -> int:
                     "performance_index_cents": shadow["performance_index_cents"],
                     "confidence": shadow["confidence"],
                     "status": shadow["status"],
-                    "sources": shadow["sources"],
+                    "sources": {
+                        "model_version": shadow["model_version"],
+                        "change_percent": shadow["change_percent"],
+                        "metrics": shadow["sources"],
+                    },
                 },
                 on_conflict="artist_id,model_version,calculation_hash",
                 ignore_duplicates=True,
             ).execute()
-            written += 1
-        return written
+        return results
     except Exception as exc:
         # Shadow evaluation must never interrupt established quote publication.
         print(f"Shadow pricing publication unavailable ({type(exc).__name__}).")
-        return 0
+        return None
 
 
 def publish_anchors(client) -> int:
@@ -90,14 +98,20 @@ def publish_anchors(client) -> int:
     today = utc_now().date()
     for row in _all_rows(client.rpc("get_pricing_observations")):
         grouped.setdefault(int(row["artist_id"]), []).append(row)
-    _publish_shadow_quotes(client)
+    shadow_results = _publish_shadow_quotes(client)
+    market_states = {
+        int(row["artist_id"]): row
+        for row in _all_rows(
+            client.table("artist_market_state").select("artist_id,pricing_version")
+        )
+    }
     for row in _all_rows(client.rpc("get_market_snapshots")):
         if date.fromisoformat(str(row["snapshot_date"])[:10]) <= today:
             legacy.setdefault(int(row["artist_id"]), []).append(row)
-    for artist_id, rows in grouped.items():
+    artist_ids = grouped.keys() | (shadow_results.keys() if shadow_results is not None else set())
+    for artist_id in sorted(artist_ids):
+        rows = grouped.get(artist_id, [])
         quote = audience_quote(rows)
-        if quote["price_cents"] is None or quote["observation_count"] < 2:
-            continue
         old = legacy_quote(
             [
                 (date.fromisoformat(str(row["snapshot_date"])[:10]), row.get("lastfm_playcount"))
@@ -108,6 +122,41 @@ def publish_anchors(client) -> int:
                 for row in legacy.get(artist_id, [])
             ],
         )
+        state = market_states.get(artist_id)
+        already_performance_priced = bool(
+            state and state["pricing_version"] == LIVE_PERFORMANCE_PRICING_VERSION
+        )
+        shadow = (shadow_results or {}).get(artist_id)
+        if (
+            shadow
+            and shadow["status"] == "fresh"
+            and shadow["performance_index_cents"] is not None
+            and shadow["source_as_of"] is not None
+            and shadow["confidence"] >= MIN_LIVE_PERFORMANCE_CONFIDENCE
+        ):
+            client.rpc(
+                "publish_performance_anchor",
+                {
+                    "p_artist_id": artist_id,
+                    "p_raw": shadow["performance_index_cents"],
+                    "p_as_of": shadow["source_as_of"].isoformat(),
+                    "p_sources": {
+                        "model_version": shadow["model_version"],
+                        "change_percent": shadow["change_percent"],
+                        "confidence": shadow["confidence"],
+                        "metrics": shadow["sources"],
+                    },
+                    "p_initial": old["price_cents"] or 1000,
+                    "p_pricing_version": LIVE_PERFORMANCE_PRICING_VERSION,
+                },
+            ).execute()
+            continue
+        # Once an artist is priced by the performance index, do not silently
+        # switch models during a source outage. Their last quote ages normally.
+        if already_performance_priced:
+            continue
+        if quote["price_cents"] is None or quote["observation_count"] < 2:
+            continue
         client.rpc(
             "publish_artist_anchor",
             {

@@ -1,6 +1,15 @@
 begin;
 insert into auth.users(id) values('10000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002');
 select public.publish_artist_anchor(4,1000,now()-interval '1 hour','{"youtube":{"asOf":"test"}}',1000);
+do $$ declare before_price bigint; after_price bigint; begin
+ select price_cents into before_price from public.artist_market_state where artist_id=4;
+ perform public.publish_performance_anchor(4,1200,now(),'{"model_version":"performance-index-shadow-v2","change_percent":2}',1000,'performance-index-v2');
+ select price_cents into after_price from public.artist_market_state where artist_id=4;
+ assert after_price=before_price,'performance-model transition changed the quote';
+ assert (select pricing_version='performance-index-v2' from public.artist_market_state where artist_id=4);
+ perform public.publish_performance_anchor(4,1260,now(),'{"model_version":"performance-index-shadow-v2","change_percent":5}',1000,'performance-index-v2');
+ assert (select price_cents>before_price from public.artist_market_state where artist_id=4),'performance change did not move quote';
+end $$;
 do $$ begin
  assert not (select enabled from public.pricing_controls where id),'engine did not default to shadow mode';
  begin

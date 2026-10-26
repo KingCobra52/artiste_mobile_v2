@@ -42,7 +42,11 @@ export function ArtistOverview({
         <p className="money-display mt-3">{formatMoney(quote.priceCents)}</p>
         <dl className="quote-measures">
           <div>
-            <dt className="small-copy">Audience growth / day</dt>
+            <dt className="small-copy">
+              {quote.pricingVersion === "performance-index-v2"
+                ? "Performance index change / day"
+                : "Audience growth / day"}
+            </dt>
             <dd
               className={
                 growth === null

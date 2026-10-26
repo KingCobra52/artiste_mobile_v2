@@ -26,6 +26,7 @@ def test_matched_audience_growth_moves_shadow_index():
     assert quote["sources"]["lastfm"]["matchedEntities"] == 1
     assert quote["sources"]["lastfm"]["confidence"] == 0.1
     assert quote["status"] == "fresh"
+    assert quote["change_percent"] > 0
 
 
 def test_cohort_churn_does_not_create_growth():
@@ -187,6 +188,7 @@ def test_calculation_fingerprint_changes_when_freshness_state_changes():
         "status": "fresh",
         "source_as_of": NOW,
         "confidence": 0.2,
+        "change_percent": 0.5,
         "sources": {"lastfm": {"included": True}},
     }
     stale = {**fresh, "performance_index_cents": None, "status": "stale"}
@@ -246,7 +248,7 @@ def test_pipeline_persists_unavailable_coverage_without_live_price_changes():
             self.shadow_table = Table()
             self.rpc_calls = []
 
-        def rpc(self, name):
+        def rpc(self, name, args=None):
             self.rpc_calls.append(name)
             return Query(
                 performance_rows if name == "get_performance_observations" else []
@@ -255,6 +257,8 @@ def test_pipeline_persists_unavailable_coverage_without_live_price_changes():
         def table(self, name):
             if name == "pricing_shadow_quotes":
                 return self.shadow_table
+            if name == "artist_market_state":
+                return Query([])
             return Query([{"id": 7}])
 
     client = Client()
@@ -321,9 +325,95 @@ def test_shadow_schema_failure_does_not_block_live_anchor_publication(capsys):
             return Query([])
 
         def table(self, name):
-            return Query([{"id": 7}])
+            return Query([])
 
     client = Client()
     assert publish_anchors(client) == 1
     assert any(name == "publish_artist_anchor" for name, _ in client.calls)
     assert "Shadow pricing publication unavailable (RuntimeError)." in capsys.readouterr().out
+
+
+def test_fresh_confident_shadow_index_publishes_performance_anchor():
+    live_rows = [
+        {
+            "artist_id": 7,
+            "snapshot_date": "2026-10-24",
+            "lastfm_tracks": {"a": 1000},
+            "youtube_subscribers": None,
+        },
+        {
+            "artist_id": 7,
+            "snapshot_date": "2026-10-25",
+            "lastfm_tracks": {"a": 1100},
+            "youtube_subscribers": None,
+        },
+    ]
+    performance_rows = [
+        {
+            "artist_id": 7,
+            "snapshot_date": "2026-10-24",
+            "lastfm_tracks": {"a": {"playcount": 1000}, "b": {"playcount": 800}},
+            "youtube_videos": {},
+        },
+        {
+            "artist_id": 7,
+            "snapshot_date": "2026-10-25",
+            "lastfm_tracks": {"a": {"playcount": 1020}, "b": {"playcount": 816}},
+            "youtube_videos": {},
+        },
+    ]
+
+    class Query:
+        def __init__(self, data):
+            self.data = data
+
+        def range(self, *_):
+            return self
+
+        def select(self, *_):
+            return self
+
+        def eq(self, *_):
+            return self
+
+        def order(self, *_):
+            return self
+
+        def execute(self):
+            return type("Response", (), {"data": self.data})()
+
+    class Table(Query):
+        def upsert(self, *_args, **_kwargs): return self
+
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def rpc(self, name, args=None):
+            self.calls.append((name, args))
+            data = (
+                performance_rows
+                if name == "get_performance_observations"
+                else live_rows
+                if name == "get_pricing_observations"
+                else []
+            )
+            return Query(data)
+
+        def table(self, name):
+            if name == "pricing_shadow_quotes":
+                return Table([])
+            if name == "artists":
+                return Query([{"id": 7}])
+            return Query([])
+
+    client = Client()
+    assert publish_anchors(client) == 1
+    _, args = next(
+        (name, args)
+        for name, args in client.calls
+        if name == "publish_performance_anchor"
+    )
+    assert args["p_pricing_version"] == "performance-index-v2"
+    assert args["p_raw"] > 1000
+    assert "publish_artist_anchor" not in [name for name, _ in client.calls]
