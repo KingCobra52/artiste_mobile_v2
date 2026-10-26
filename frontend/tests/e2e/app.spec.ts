@@ -1,7 +1,8 @@
 import { expectAccessible } from "./accessibility";
+import { isWebKitSameOriginRscCancellation } from "./page-errors";
 import { expect, test } from "@playwright/test";
 const browserErrors = new WeakMap<object, string[]>();
-test.beforeEach(async ({ page, browserName }) => {
+test.beforeEach(async ({ page, browserName, baseURL }) => {
   const errors: string[] = [];
   browserErrors.set(page, errors);
   page.on("pageerror", (error) => {
@@ -9,12 +10,12 @@ test.beforeEach(async ({ page, browserName }) => {
     // replacement as access-control page errors. Keep all other errors fatal.
     // https://github.com/microsoft/playwright/issues/43120
     if (
-      browserName === "webkit" &&
-      error.message.includes("127.0.0.1:3000/") &&
-      error.message.includes("_rsc=") &&
-      error.message.endsWith("due to access control checks.")
-    )
-      return;
+      isWebKitSameOriginRscCancellation({
+        message: error.message,
+        browserName,
+        baseURL,
+      })
+    ) return;
     errors.push(error.message);
   });
 });
