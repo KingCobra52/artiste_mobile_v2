@@ -144,15 +144,17 @@ export default async function ArtistPage({
           <details className="disclosure">
             <summary>How this virtual price works</summary>
             <p>
-              Audience growth establishes an external anchor. Net completed
-              buying and selling adjust prices by at most 20% around that
-              anchor. The estimated order follows the whole curve and includes a
+              Virtual shares are paper positions, not ownership or royalties.
+              Audience signals establish the current price anchor. Completed
+              buys and sells move a simulated, elastic market curve by at most
+              20% around that anchor; this is not a fixed supply of artist
+              shares. The estimate follows the whole curve and includes a
               0.10% fee. Only fresh published quotes can be traded.
             </p>
             <p>
-              Virtual shares provide no ownership, royalties, or real money.
-              Source growth is an average per elapsed day, not a guaranteed
-              24-hour price return.
+              Source growth is measured per elapsed day, not a guaranteed
+              24-hour price return. A separate performance-index model is being
+              evaluated in shadow mode and does not determine this quote.
             </p>
             <p className="small-copy">
               Pricing method: {quote.pricingVersion ?? "Unavailable"}

@@ -2,6 +2,12 @@
 
 Artiste remains a Next.js → FastAPI → Supabase paper-trading application. Application tables stay behind FastAPI. Supabase Auth creates and refreshes user sessions. No agent, agent simulation, real-money feature, or CAPTCHA is included.
 
+`docs/pricing-model.md` documents the live `audience-inventory-v2` quote and the
+separate `performance-index-shadow-v1` comparison series. The shadow series is
+written by ingestion to `pricing_shadow_quotes`; it is not used for quotes or
+trade execution. Keep pricing execution disabled while reviewing its coverage
+and results.
+
 ## Deployment sequence
 
 1. Back up the database and replay committed migrations in a staging project. The four `20261024*` migrations contain the catalog, pricing engine, cost-basis migration, onboarding state and ingestion reporting. Do not change hosted tables manually as a substitute for migrations.
