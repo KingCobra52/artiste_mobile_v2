@@ -1,3 +1,4 @@
+import { expectAccessible } from "./accessibility";
 import { expect, test } from "@playwright/test";
 test("onboarding has three screens, resumes and can be skipped", async ({
   page,
@@ -102,4 +103,64 @@ test("interrupted signup keeps form progress and prevents duplicate submission",
   await expect(
     page.getByRole("button", { name: "Create account", exact: true }),
   ).toBeEnabled();
+});
+
+for (const appearance of ["light", "dark"] as const) {
+  test(`${appearance} onboarding and authentication are accessible`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({
+      colorScheme: appearance,
+      reducedMotion: "reduce",
+    });
+    for (const path of [
+      "/onboarding?replay=1",
+      "/login",
+      "/signup",
+      "/recover",
+    ]) {
+      await page.goto(path);
+      await expect(page.locator("h1")).toBeVisible();
+      await expectAccessible(page);
+    }
+  });
+}
+
+test("authentication remains usable with enlarged phone text", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  for (const path of [
+    "/onboarding?replay=1",
+    "/login",
+    "/signup",
+    "/recover",
+  ]) {
+    await page.goto(path);
+    await expect(page.locator("h1")).toBeVisible();
+    await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    const geometry = await page.evaluate(() => ({
+      width: innerWidth,
+      scroll: document.documentElement.scrollWidth,
+      overflow: Array.from(document.querySelectorAll("main *"))
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.getAttribute("class"),
+          right: element.getBoundingClientRect().right,
+        }))
+        .filter((element) => element.right > innerWidth + 1)
+        .slice(0, 6),
+    }));
+    expect(
+      geometry.scroll,
+      `${path}: ${JSON.stringify(geometry)}`,
+    ).toBeLessThanOrEqual(geometry.width);
+  }
 });

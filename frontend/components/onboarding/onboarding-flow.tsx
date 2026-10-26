@@ -1,5 +1,6 @@
 "use client";
-import Link from "next/link";
+import { Wordmark } from "@/components/brand/wordmark";
+import { Icon } from "@/components/ui/icon";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -19,13 +20,13 @@ function snapshot() {
 const screens = [
   {
     title: "Your ear. Your artist market.",
-    text: "Artiste brings music discovery and paper trading together. Research artists, follow their momentum and build a virtual portfolio. Shares give you no ownership or royalties, and cash is not real money.",
+    text: "Discover music artists, follow their audience momentum, and practice with virtual shares. All cash is virtual. Shares give you no ownership or royalties.",
     example:
       "Imagine $10,000 of virtual cash and an artist priced at $10 per share. You can buy whole shares—not fractions.",
   },
   {
     title: "Understand what moves a price",
-    text: "Audience growth from Last.fm and YouTube sets an anchor. Completed platform buying and selling adjust the quote within limits. New pricing begins in preview mode until its checks pass.",
+    text: "Audience growth from Last.fm and YouTube helps set a price. Completed platform trades can move it within limits. A quote’s date tells you how current it is; stale quotes cannot be traded.",
     example:
       "An artist moving from $10 to $11 changes the value of five shares from $50 to $55. Check the quote date: a stale quote cannot be traded.",
   },
@@ -109,55 +110,113 @@ export function OnboardingFlow({
     });
   }
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-xl flex-col px-5 py-8">
-      <Link className="touch flex items-center text-2xl font-semibold" href="/">
-        artiste
-      </Link>
-      <section className="my-auto rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
-        <p aria-live="polite" className="text-sm text-sky-200">
-          {step + 1} of 3
-        </p>
-        <h1 className="mt-4 text-4xl leading-tight">{screens[step].title}</h1>
-        <p className="mt-5 leading-7 text-slate-300">{screens[step].text}</p>
-        <aside className="mt-6 rounded-2xl border border-sky-200/15 bg-sky-200/5 p-4 text-sm leading-7">
-          <h2 className="font-semibold">One example, step by step</h2>
-          {screens[step].example}
-        </aside>
-        {seen && (
-          <p className="mt-4 text-sm text-slate-400">
-            You have seen this introduction. Continue below or replay the
-            screens.
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="mt-4 text-sm text-rose-200">
-            {error}
-          </p>
-        )}
-        <div className="mt-6 flex gap-3">
-          <button
-            className="touch rounded-xl border border-white/20 px-5 disabled:opacity-40"
-            disabled={step === 0 || pending || !hydrated}
-            onClick={() => move(step - 1)}
-          >
-            Back
-          </button>
-          <button
-            className="touch action-primary flex-1 rounded-xl px-5 font-semibold"
-            disabled={pending || !hydrated}
-            onClick={() => (step === 2 || seen ? finish() : move(step + 1))}
-          >
-            {pending ? "Saving…" : step === 2 || seen ? "Get started" : "Next"}
-          </button>
-        </div>
+    <main className="onboarding-shell">
+      <header className="onboarding-header">
+        <Wordmark href="/" />
         <button
-          className="touch mt-3 w-full text-sm text-slate-300"
+          className="text-link text-sm"
           disabled={pending || !hydrated}
           onClick={finish}
         >
           Skip
         </button>
+      </header>
+      <section className="onboarding-layout" aria-labelledby="onboarding-title">
+        <div className="onboarding-copy">
+          <div className="step-progress">
+            <div className="step-bars" aria-hidden="true">
+              {[0, 1, 2].map((value) => (
+                <span key={value} data-complete={value <= step} />
+              ))}
+            </div>
+            <p className="small-copy" aria-live="polite">
+              {step + 1} of 3
+            </p>
+          </div>
+          <h1 id="onboarding-title" className="display">
+            {screens[step].title}
+          </h1>
+          <p className="body-copy">{screens[step].text}</p>
+          {seen && (
+            <p className="small-copy mt-4">
+              You’ve seen the introduction. Continue when you’re ready, or
+              revisit each step.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="notice mt-4">
+              {error}
+            </p>
+          )}
+        </div>
+        <aside className="onboarding-example" key={step}>
+          <p className="eyebrow">One example, step by step</p>
+          {step === 0 && (
+            <div className="example-sleeve" aria-hidden="true">
+              <div className="record-art" />
+            </div>
+          )}
+          <h2 className="section-title mt-4">
+            {step === 0
+              ? "A virtual starting point."
+              : step === 1
+                ? "Same shares. New quote."
+                : "Always review the details."}
+          </h2>
+          <dl className="example-values">
+            {(step === 0
+              ? [
+                  ["Virtual cash", "$10,000"],
+                  ["Example share", "$10"],
+                ]
+              : step === 1
+                ? [
+                    ["5 shares at $10", "$50"],
+                    ["5 shares at $11", "$55"],
+                  ]
+                : [
+                    ["Whole shares", "5"],
+                    ["Quoted value", "$50"],
+                  ]
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt className="small-copy">{label}</dt>
+                <dd>
+                  <strong>{value}</strong>
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p className="body-copy text-sm">{screens[step].example}</p>
+          <p className="small-copy mt-4">
+            Illustrative example, before fees and price impact. Your order
+            estimate shows the final details.{" "}
+            {step === 2 &&
+              "If execution is disabled, you can still research artists and review estimates."}
+          </p>
+        </aside>
+        <div className="onboarding-actions">
+          <button
+            className="action-secondary"
+            disabled={step === 0 || pending || !hydrated}
+            onClick={() => move(step - 1)}
+          >
+            <Icon name="back" />
+            Back
+          </button>
+          <button
+            className="action-primary"
+            disabled={pending || !hydrated}
+            onClick={() => (step === 2 || seen ? finish() : move(step + 1))}
+          >
+            {pending ? "Saving…" : step === 2 || seen ? "Get started" : "Next"}
+            <Icon name="arrow" />
+          </button>
+        </div>
       </section>
+      <footer className="onboarding-footer">
+        Music discovery. Virtual shares. A place to learn.
+      </footer>
     </main>
   );
 }

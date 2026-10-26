@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { Icon } from "@/components/ui/icon";
 import { RetryButton } from "@/components/ui/retry-button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,9 +25,9 @@ async function ArtistTrading({
   }
   if (!portfolio)
     return (
-      <section className="rounded-2xl border border-white/15 p-5">
+      <section className="panel">
         <h2 className="font-semibold">Trading controls unavailable</h2>
-        <p className="mt-3 text-sm text-slate-400">
+        <p className="body-copy mt-3 text-sm">
           Your portfolio could not be loaded. You can still research this
           artist. Use the button below to retry.
         </p>
@@ -66,90 +67,99 @@ export default async function ArtistPage({
     );
   }
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        className="touch inline-flex items-center text-sm text-sky-200"
-        href="/market"
-      >
-        ← Back to Market
+    <div>
+      <Link href="/market" className="text-link mb-5 text-sm">
+        <Icon name="back" />
+        Back to Market
       </Link>
-      <ArtistOverview artist={artist} quote={quote} />
-      {artist.active === false && (
-        <p
-          role="status"
-          className="rounded-xl bg-amber-300/10 p-4 text-sm text-amber-100"
-        >
-          This artist is outside the supported catalog. Existing holdings remain
-          visible and use purchase-cost valuation.
-        </p>
-      )}
-      <section className="rounded-3xl border border-white/10 bg-slate-900 p-6">
-        <h2 className="text-xl font-semibold">Explore the music</h2>
-        <p className="mt-3 leading-7 text-slate-300">
-          {artist.musicContext || "Music context is being reviewed."}
-        </p>
-        {(artist.notableReleases?.length ?? 0) > 0 && (
-          <>
-            <h3 className="mt-5 text-sm font-semibold">
-              Start with these releases
-            </h3>
-            <ul className="mt-2 list-inside list-disc space-y-2 text-sm text-slate-300">
-              {artist.notableReleases!.map((release) => (
-                <li key={release}>{release}</li>
-              ))}
-            </ul>
-          </>
-        )}
-        {artist.listeningUrl?.startsWith("https://") && (
-          <a
-            className="touch action-primary mt-5 inline-flex items-center rounded-xl px-5"
-            href={artist.listeningUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+      <div className="artist-page">
+        <div className="artist-research">
+          <ArtistOverview artist={artist} quote={quote} />
+          {artist.active === false && (
+            <p role="status" className="notice">
+              <Icon name="clock" />
+              This artist is outside the supported catalog. Existing holdings
+              remain visible and use purchase-cost valuation.
+            </p>
+          )}
+          <section className="panel">
+            <p className="eyebrow mb-3">Behind the numbers</p>
+            <h2 className="section-title">Explore the music</h2>
+            <p className="body-copy mt-4">
+              {artist.musicContext || "Music context is being reviewed."}
+            </p>
+            {Boolean(artist.notableReleases?.length) && (
+              <>
+                <h3 className="small-copy mt-6">Start with these releases</h3>
+                <ul className="release-list">
+                  {artist.notableReleases!.map((release) => (
+                    <li key={release}>
+                      <Icon name="record" />
+                      {release}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {artist.listeningUrl?.startsWith("https://") && (
+              <a
+                className="action-secondary w-full sm:w-auto"
+                href={artist.listeningUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Icon name="record" />
+                Listen on the official channel ↗
+              </a>
+            )}
+            {artist.contextSourceUrl?.startsWith("https://") && (
+              <a
+                className="text-link mt-3 text-sm"
+                href={artist.contextSourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Biography and context source ↗
+              </a>
+            )}
+          </section>
+          <HistorySection
+            title="Price history"
+            path={`/api/v1/artists/${artistId}/history`}
+          />
+        </div>
+        <aside className="artist-trading">
+          <Suspense
+            fallback={
+              <div className="panel" role="status">
+                <p className="eyebrow">Paper trading</p>
+                <p className="body-copy mt-3">
+                  Loading your cash and holdings…
+                </p>
+              </div>
+            }
           >
-            Listen on the official channel ↗
-          </a>
-        )}
-        {artist.contextSourceUrl?.startsWith("https://") && (
-          <a
-            className="touch mt-3 flex items-center text-xs text-slate-400 underline"
-            href={artist.contextSourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Biography and context source ↗
-          </a>
-        )}
-      </section>
-      <HistorySection
-        title="Price history"
-        path={`/api/v1/artists/${artistId}/history`}
-      />
-      <Suspense
-        fallback={
-          <p role="status" className="p-5 text-sm text-slate-400">
-            Loading trading controls…
-          </p>
-        }
-      >
-        <ArtistTrading artist={artist} quote={quote} />
-      </Suspense>
-      <details className="rounded-2xl border border-white/10 p-5">
-        <summary className="touch cursor-pointer font-semibold">
-          How this virtual price works
-        </summary>
-        <p className="mt-3 text-sm leading-7 text-slate-400">
-          Audience growth establishes an external anchor. Net completed buying
-          and selling adjust prices by at most 20% around that anchor. The
-          estimated order follows the whole curve and includes a 0.10% fee. Only
-          fresh published quotes can be traded. Virtual shares provide no
-          ownership, royalties or real money.
-        </p>
-        <p className="mt-3 text-xs text-slate-400">
-          Methodology: {quote.pricingVersion}. Source growth is an average per
-          elapsed day, not a guaranteed 24-hour price return.
-        </p>
-      </details>
+            <ArtistTrading artist={artist} quote={quote} />
+          </Suspense>
+          <details className="disclosure">
+            <summary>How this virtual price works</summary>
+            <p>
+              Audience growth establishes an external anchor. Net completed
+              buying and selling adjust prices by at most 20% around that
+              anchor. The estimated order follows the whole curve and includes a
+              0.10% fee. Only fresh published quotes can be traded.
+            </p>
+            <p>
+              Virtual shares provide no ownership, royalties, or real money.
+              Source growth is an average per elapsed day, not a guaranteed
+              24-hour price return.
+            </p>
+            <p className="small-copy">
+              Pricing method: {quote.pricingVersion ?? "Unavailable"}
+            </p>
+          </details>
+        </aside>
+      </div>
     </div>
   );
 }

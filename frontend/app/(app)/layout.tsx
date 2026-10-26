@@ -32,13 +32,10 @@ export default async function ProtectedLayout({
     <div className="min-h-dvh">
       <AppHeader />
       <OnboardingGate required={required} />
-      <a href="#main-content" className="sr-only focus:not-sr-only">
+      <a href="#main-content" className="skip-link">
         Skip to content
       </a>
-      <main
-        id="main-content"
-        className="mx-auto w-full max-w-5xl px-5 sm:px-8 pb-32 pt-8"
-      >
+      <main id="main-content" className="app-main">
         {children}
       </main>
       <BottomNavigation />

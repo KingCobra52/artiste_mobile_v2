@@ -17,18 +17,18 @@ export default async function LoginPage({
       description="Sign in with your phone number and password, or use your existing email account."
     >
       {params.error && (
-        <p role="alert" className="mt-3 text-rose-200">
+        <p role="alert" className="mt-3 text-danger">
           We could not finish authentication. Please try again.
         </p>
       )}
       {params.reset && (
-        <p role="status" className="mt-3 text-sky-100">
+        <p role="status" className="mt-3 text-accent">
           Password updated. Sign in with your new password.
         </p>
       )}
       <LoginForm nextPath={next} />
       <Link
-        className="touch mt-4 flex items-center text-sm text-sky-200"
+        className="touch mt-4 flex items-center text-sm text-accent"
         href={`/signup?next=${encodeURIComponent(next)}`}
       >
         Create an account

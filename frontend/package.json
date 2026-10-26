@@ -31,6 +31,7 @@
     "@types/node": "^24.5.2",
     "@types/react": "^19.1.14",
     "@types/react-dom": "^19.1.9",
+    "axe-core": "4.14.0",
     "eslint": "^9.36.0",
     "eslint-config-next": "^16.0.0",
     "tailwindcss": "^4.1.13",

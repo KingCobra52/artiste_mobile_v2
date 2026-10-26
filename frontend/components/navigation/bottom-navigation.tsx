@@ -1,33 +1,34 @@
 "use client";
-
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
+import { Icon } from "@/components/ui/icon";
 const items = [
-  { href: "/market", label: "Market" },
-  { href: "/portfolio", label: "Portfolio" },
+  { href: "/market", label: "Market", icon: "record" },
+  { href: "/portfolio", label: "Portfolio", icon: "portfolio" },
 ] as const;
-
-export function BottomNavigation() {
+export function BottomNavigation({ desktop = false }: { desktop?: boolean }) {
   const pathname = usePathname();
-
   return (
-    <nav aria-label="Primary navigation" className="app-navigation fixed inset-x-0 bottom-0 z-30 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl">
-      <div className="mx-auto grid max-w-lg grid-cols-2 px-3 py-2">
-        {items.map((item) => {
-          const active = pathname === item.href || (item.href === "/market" && pathname.startsWith("/artists/"));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex min-h-11 items-center justify-center rounded-xl text-sm font-semibold transition ${active ? "nav-active" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
-            >
-              {item.label}
-            </Link>
-          );
-        })}
-      </div>
+    <nav
+      aria-label="Primary navigation"
+      className={desktop ? "desktop-nav" : "mobile-nav"}
+    >
+      {items.map((item) => {
+        const active =
+          pathname === item.href ||
+          (item.href === "/market" && pathname.startsWith("/artists/"));
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="nav-link"
+            aria-current={active ? "page" : undefined}
+          >
+            <Icon name={item.icon} />
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

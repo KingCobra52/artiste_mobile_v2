@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ConfigurationNotice } from "@/components/ui/configuration-notice";
 import { getSupabaseConfig } from "@/lib/supabase/config";
+import { Wordmark } from "@/components/brand/wordmark";
+import { Icon } from "@/components/ui/icon";
 export function AuthPage({
   title,
   description,
@@ -12,31 +14,37 @@ export function AuthPage({
 }) {
   if (!getSupabaseConfig().configured) return <ConfigurationNotice />;
   return (
-    <main className="grid min-h-dvh place-items-center px-5 py-8">
-      <section className="w-full max-w-md rounded-3xl border border-white/10 bg-slate-900 p-6 sm:p-8">
-        <Link
-          className="touch inline-flex items-center text-2xl font-semibold"
-          href="/"
-        >
-          artiste
-        </Link>
-        <p className="mt-5 text-xs uppercase tracking-widest text-sky-200">
-          Music discovery · Paper trading
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold">{title}</h1>
-        <p className="mt-3 leading-7 text-slate-400">{description}</p>
-        {children}
-        <Link
-          href="/onboarding?replay=1"
-          className="touch mt-5 flex items-center text-sm text-sky-200"
-        >
-          How Artiste works
-        </Link>
-        <p className="mt-3 text-xs leading-5 text-slate-400">
-          All cash and shares are virtual. Nothing represents ownership,
-          royalties or real money.
-        </p>
-      </section>
+    <main className="auth-shell">
+      <div>
+        <Wordmark href="/" />
+      </div>
+      <div className="auth-layout">
+        <aside className="auth-story">
+          <p className="eyebrow">Music discovery. Paper trading.</p>
+          <h2 className="display mt-4">Follow what moves you.</h2>
+          <p className="body-copy">
+            Get to know the artists behind the numbers. Explore the music,
+            follow audience momentum, and build a portfolio with virtual shares.
+          </p>
+          <div className="record-art" aria-hidden="true" />
+        </aside>
+        <section className="auth-form-panel">
+          <p className="eyebrow">Your place in the music</p>
+          <h1>{title}</h1>
+          <p className="body-copy mt-4">{description}</p>
+          {children}
+          <footer className="auth-footer">
+            <Link href="/onboarding?replay=1" className="text-link text-sm">
+              <Icon name="help" />
+              How Artiste works
+            </Link>
+            <p className="small-copy mt-2">
+              All cash and shares are virtual. They represent no ownership,
+              royalties, or real money.
+            </p>
+          </footer>
+        </section>
+      </div>
     </main>
   );
 }

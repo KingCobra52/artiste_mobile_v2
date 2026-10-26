@@ -1,3 +1,4 @@
+import { expectAccessible } from "./accessibility";
 import { expect, test } from "@playwright/test";
 const browserErrors = new WeakMap<object, string[]>();
 test.beforeEach(async ({ page, browserName }) => {
@@ -144,4 +145,106 @@ test("unknown artists have a useful not-found state", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Artist not found" }),
   ).toBeVisible();
+});
+
+for (const appearance of ["light", "dark"] as const) {
+  test(`${appearance} appearance has accessible contrast and controls`, async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({
+      colorScheme: appearance,
+      reducedMotion: "reduce",
+    });
+    for (const [path, title] of [
+      ["/market", "Find your next artist"],
+      ["/artists/4", "Kendrick Lamar"],
+      ["/portfolio", "Your music portfolio"],
+      ["/account", "Your account"],
+    ]) {
+      await page.goto(path);
+      await expect(
+        page.getByRole("heading", { name: title, exact: true }),
+      ).toBeVisible();
+      await expectAccessible(page);
+    }
+  });
+}
+
+test("enlarged text preserves the phone layout and keyboard focus", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
+  for (const path of ["/market", "/artists/4", "/portfolio", "/account"]) {
+    await page.goto(path);
+    await expect(page.locator("h1")).toBeVisible();
+    await page.addStyleTag({ content: "html { font-size: 200% !important; }" });
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    const geometry = await page.evaluate(() => ({
+      width: innerWidth,
+      scroll: document.documentElement.scrollWidth,
+      overflow: Array.from(document.querySelectorAll("main *"))
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.getAttribute("class"),
+          right: element.getBoundingClientRect().right,
+        }))
+        .filter((element) => element.right > innerWidth + 1)
+        .slice(0, 6),
+    }));
+    expect(
+      geometry.scroll,
+      `${path}: ${JSON.stringify(geometry)}`,
+    ).toBeLessThanOrEqual(geometry.width);
+  }
+  await page.goto("/market");
+  const search = page.getByRole("searchbox");
+  await expect(search).toBeEnabled();
+  await search.focus();
+  await page.keyboard.type("Kendrick");
+  const clear = page.getByRole("button", { name: "Clear artist search" });
+  await clear.focus();
+  await expect(clear).toBeFocused();
+  expect(
+    await clear.evaluate((element) => getComputedStyle(element).outlineStyle),
+  ).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(search).toHaveValue("");
+});
+
+test("trade review receives focus and clears when the order is revised", async ({
+  page,
+}) => {
+  await page.goto("/artists/4");
+  await page
+    .getByRole("button", { name: "Review estimate", exact: true })
+    .click();
+  const heading = page.getByRole("heading", {
+    name: "Review your paper trade",
+  });
+  await expect(heading).toBeFocused();
+  await expect(page.getByText("Total cost", { exact: true })).toBeVisible();
+  if (
+    await page
+      .getByText("Preview only. Paper trading is currently disabled.", {
+        exact: true,
+      })
+      .isVisible()
+  ) {
+    await expect(
+      page.getByRole("button", { name: "Confirm buy", exact: true }),
+    ).toHaveCount(0);
+  }
+  await expectAccessible(page);
+  await page.getByLabel("Number of shares").fill("2");
+  await expect(heading).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Review estimate", exact: true }),
+  ).toBeEnabled();
 });

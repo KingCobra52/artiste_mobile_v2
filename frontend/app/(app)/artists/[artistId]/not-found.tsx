@@ -1,11 +1,18 @@
 import Link from "next/link";
-import { EmptyState } from "@/components/ui/states";
-
+import { Icon } from "@/components/ui/icon";
 export default function ArtistNotFound() {
   return (
-    <div className="pt-12">
-      <EmptyState title="Artist not found">This artist is not part of the preview market.</EmptyState>
-      <Link href="/market" className="mx-auto mt-5 flex min-h-11 w-fit items-center rounded-xl bg-lime-300 px-5 font-semibold text-slate-950">Return to Market</Link>
-    </div>
+    <section className="state-panel">
+      <Icon name="record" />
+      <p className="eyebrow">Not found</p>
+      <h1 className="section-title mt-3">Artist not found</h1>
+      <p className="body-copy mt-3">
+        This artist is not in the current catalog. Explore the Market to find
+        supported artists.
+      </p>
+      <Link href="/market" className="action-secondary mt-5">
+        Return to Market
+      </Link>
+    </section>
   );
 }

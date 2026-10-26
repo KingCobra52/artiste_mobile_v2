@@ -111,7 +111,7 @@ export function AuthFlow({
     <form
       ref={form}
       onSubmit={submit}
-      className="mt-6 space-y-5"
+      className="auth-flow mt-6 space-y-5"
       aria-busy={pending}
     >
       <fieldset disabled={!hydrated} className="min-w-0 space-y-5">
@@ -123,13 +123,17 @@ export function AuthFlow({
           value={mode === "attach" ? "attach" : "signup"}
         />
         {(mode === "login" || mode === "recover") && stage === "entry" && (
-          <div className="flex gap-2" aria-label="Sign-in method">
+          <div
+            className="auth-methods"
+            role="group"
+            aria-label="Sign-in method"
+          >
             {["phone", "email"].map((value) => (
               <button
                 key={value}
                 type="button"
                 aria-pressed={method === value}
-                className={`touch flex-1 rounded-xl border border-white/15 px-3 ${method === value ? "nav-active" : ""}`}
+                className="touch"
                 onClick={() => {
                   setMethod(value);
                   setState({ error: null });
@@ -160,7 +164,7 @@ export function AuthFlow({
               />
             </label>
             <button
-              className="touch text-sm text-sky-200 underline"
+              className="touch text-sm text-accent underline"
               type="button"
               disabled={pending}
               onClick={() => {
@@ -174,7 +178,7 @@ export function AuthFlow({
         ) : (
           mode !== "reset" &&
           (method === "phone" ? (
-            <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-3">
+            <div className="phone-fields">
               <label>
                 Country code
                 <input
@@ -237,7 +241,7 @@ export function AuthFlow({
               required
             />
             {mode !== "login" && (
-              <span className="mt-2 block text-xs text-slate-400">
+              <span className="mt-2 block text-[0.8125rem] text-muted">
                 Use 8–128 characters.
               </span>
             )}
@@ -246,13 +250,13 @@ export function AuthFlow({
         {state.error && (
           <p
             role="alert"
-            className="rounded-xl bg-rose-400/10 p-3 text-sm text-rose-200"
+            className="rounded-xl bg-surface-alt p-3 text-sm text-danger"
           >
             {state.error}
           </p>
         )}
         {state.success && (
-          <p role="status" className="text-sm text-sky-100">
+          <p role="status" className="text-sm text-accent">
             {state.success}
           </p>
         )}
@@ -280,7 +284,7 @@ export function AuthFlow({
             type="button"
             onClick={resend}
             disabled={pending || cooldown > 0}
-            className="touch w-full rounded-xl border border-white/20 px-4"
+            className="touch w-full rounded-xl border border-line px-4"
           >
             {cooldown
               ? `Resend code in ${cooldown}s`
@@ -293,7 +297,7 @@ export function AuthFlow({
               <button
                 type="button"
                 disabled={pending || cooldown > 0}
-                className="touch text-sm text-sky-200"
+                className="touch text-sm text-accent"
                 onClick={() => {
                   if (!form.current) return;
                   const data = new FormData(form.current);
@@ -313,7 +317,7 @@ export function AuthFlow({
               </button>
             )}
             <Link
-              className="touch flex items-center text-sm text-sky-200"
+              className="touch flex items-center text-sm text-accent"
               href={`/recover?next=${encodeURIComponent(nextPath)}`}
             >
               Forgot password?
@@ -321,7 +325,7 @@ export function AuthFlow({
             {method === "email" && (
               <button
                 type="button"
-                className="touch text-sm text-sky-200"
+                className="touch text-sm text-accent"
                 disabled={pending || cooldown > 0}
                 onClick={() => {
                   if (!form.current) return;

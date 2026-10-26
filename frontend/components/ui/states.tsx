@@ -1,20 +1,20 @@
 import type { ReactNode } from "react";
 import { RetryButton } from "./retry-button";
-
+import { Icon } from "./icon";
 export function LoadingState({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="space-y-3" role="status" aria-live="polite">
+    <div role="status" aria-live="polite" className="grid gap-4">
       <span className="sr-only">{label}</span>
       {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="h-24 animate-pulse rounded-2xl bg-slate-800/70"
-        />
+        <div className="skeleton" key={item} aria-hidden="true">
+          <div className="skeleton-line" />
+          <div className="skeleton-line" />
+          <div className="skeleton-line" style={{ width: "80%" }} />
+        </div>
       ))}
     </div>
   );
 }
-
 export function EmptyState({
   title,
   children,
@@ -23,32 +23,31 @@ export function EmptyState({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-700 px-5 py-9 text-center">
-      <h2 className="font-semibold text-white">{title}</h2>
-      <div className="mt-2 text-sm leading-6 text-slate-400">{children}</div>
+    <div className="state-panel">
+      <Icon name="record" />
+      <h2>{title}</h2>
+      <div className="body-copy mt-3">{children}</div>
     </div>
   );
 }
-
 export function ErrorState({
   title,
   message,
+  retry = true,
 }: {
   title: string;
   message: string;
+  retry?: boolean;
 }) {
   return (
-    <div
-      role="alert"
-      className="rounded-2xl border border-rose-400/25 bg-rose-400/10 p-5"
-    >
-      <h2 className="font-semibold text-rose-100">{title}</h2>
-      <p className="mt-1 text-sm text-rose-200/80">{message}</p>
-      <RetryButton />
+    <div role="alert" className="state-panel state-error">
+      <Icon name="help" />
+      <h2>{title}</h2>
+      <p>{message}</p>
+      {retry && <RetryButton />}
     </div>
   );
 }
-
 export function StaleDataNotice({
   date,
   status = "stale",
@@ -57,11 +56,14 @@ export function StaleDataNotice({
   status?: "stale" | "unavailable";
 }) {
   return (
-    <p className="rounded-xl border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
-      {status === "unavailable"
-        ? "No usable quote is available"
-        : "This quote is stale"}
-      {date ? ` (last updated ${date})` : ""}. Trading is disabled.
+    <p className="notice">
+      <Icon name="clock" />
+      <span>
+        {status === "unavailable"
+          ? "No usable quote is available"
+          : "This quote is stale"}
+        {date ? ` (last updated ${date})` : ""}. Trading is disabled.
+      </span>
     </p>
   );
 }

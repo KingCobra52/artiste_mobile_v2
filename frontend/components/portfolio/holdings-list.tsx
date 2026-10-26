@@ -1,16 +1,31 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/states";
+import { Icon } from "@/components/ui/icon";
 import { formatTimestamp, formatMoney } from "@/lib/format";
 import type { Holding } from "@/types";
 export function HoldingPrices({ holdings }: { holdings: Holding[] }) {
   return (
-    <ul className="mt-3 space-y-2 text-xs text-slate-300">
+    <ul className="holding-price-notes">
       {holdings.map((holding) => (
         <li key={holding.artist.id}>
-          <span className="font-semibold">{holding.artist.name}</span> ·{" "}
-          {holding.valuationBasis === "purchase_cost"
-            ? "Purchase cost used · No current market quote"
-            : `${holding.valuationBasis === "stale_quote" ? "Stale quote" : "Last priced"}: ${formatTimestamp(holding.quoteAsOf)}${holding.dataSourceAsOf ? ` · Audience data ${formatTimestamp(holding.dataSourceAsOf)}` : ""}`}
+          <span className="font-semibold">{holding.artist.name}</span>
+          <span className="text-muted">
+            {holding.valuationBasis === "purchase_cost" ? (
+              "Purchase cost used · No current market quote"
+            ) : (
+              <>
+                {holding.valuationBasis === "stale_quote"
+                  ? "Stale quote"
+                  : "Last priced"}
+                : {formatTimestamp(holding.quoteAsOf)}
+                {holding.dataSourceAsOf && (
+                  <span className="block mt-1">
+                    Audience data {formatTimestamp(holding.dataSourceAsOf)}
+                  </span>
+                )}
+              </>
+            )}
+          </span>
         </li>
       ))}
     </ul>
@@ -18,130 +33,152 @@ export function HoldingPrices({ holdings }: { holdings: Holding[] }) {
 }
 function Purchases({ holding }: { holding: Holding }) {
   return (
-    <details>
-      <summary className="touch cursor-pointer text-sm text-sky-200">
-        Purchase history
-      </summary>
-      <ul className="mt-2 space-y-3 text-xs text-slate-300">
+    <details className="disclosure mt-4">
+      <summary>Purchase history</summary>
+      <ul className="space-y-3 mt-3 small-copy">
         {holding.purchases?.length ? (
           holding.purchases.map((purchase, index) => (
             <li key={`${purchase.date}-${index}`}>
-              {purchase.quantity} shares at {formatMoney(purchase.priceCents)} ·{" "}
-              {formatTimestamp(purchase.date)}
-              <br />
-              Total {formatMoney(purchase.totalCents)} including{" "}
-              {formatMoney(purchase.feeCents)} fee
+              <p className="text-ink font-semibold">
+                {purchase.quantity} shares at {formatMoney(purchase.priceCents)}
+              </p>
+              <p>{formatTimestamp(purchase.date)}</p>
+              <p>
+                Total {formatMoney(purchase.totalCents)} including{" "}
+                {formatMoney(purchase.feeCents)} fee
+              </p>
             </li>
           ))
         ) : (
           <li>
-            Detailed purchases were not recorded for this legacy position.
+            Detailed purchases were not recorded for this earlier position.
           </li>
         )}
       </ul>
     </details>
   );
 }
-function values(holding: Holding) {
-  return [
-    ["Shares", String(holding.quantity)],
-    ["Avg. purchase cost", formatMoney(holding.averageCostCents)],
-    [
-      "Purchase value",
-      formatMoney(
-        holding.costBasisCents ?? holding.averageCostCents * holding.quantity,
-      ),
-    ],
-    ["Current unit value", formatMoney(holding.currentPriceCents ?? null)],
-    ["Holding value", formatMoney(holding.currentValueCents)],
-    ["Last priced", formatTimestamp(holding.quoteAsOf)],
-    ["First purchased", formatTimestamp(holding.firstPurchasedAt)],
-    [
-      "Last purchased",
-      formatTimestamp(holding.lastPurchasedAt ?? holding.firstPurchasedAt),
-    ],
-  ];
+function HoldingNotice({ holding }: { holding: Holding }) {
+  return (
+    <>
+      {holding.valuationBasis === "purchase_cost" && (
+        <p className="small-copy text-warning mt-3">
+          Valued at purchase cost—current quote unavailable.
+        </p>
+      )}
+      {holding.valuationBasis === "stale_quote" && (
+        <p className="small-copy text-warning mt-3">
+          Uses a stale market quote.
+        </p>
+      )}
+      {holding.costBasisMethod === "legacy_average" && (
+        <p className="small-copy mt-3">
+          Purchase cost uses the saved legacy average; a complete acquisition
+          ledger is unavailable.
+        </p>
+      )}
+    </>
+  );
+}
+function cost(holding: Holding) {
+  return holding.costBasisCents ?? holding.averageCostCents * holding.quantity;
 }
 export function HoldingsList({ holdings }: { holdings: Holding[] }) {
   if (!holdings.length)
     return (
       <EmptyState title="No holdings yet">
-        Research a supported artist before reviewing a paper trade.
-        <Link
-          className="touch action-primary mx-auto mt-5 flex w-fit items-center rounded-xl px-5"
-          href="/market"
-        >
-          Explore the Market →
+        Start with an artist’s story and music. Your holdings will appear here
+        after a completed paper trade.
+        <Link href="/market" className="text-link mt-3">
+          Explore the Market <Icon name="arrow" />
         </Link>
       </EmptyState>
     );
   return (
     <section aria-labelledby="holdings-title">
-      <h2 id="holdings-title" className="mb-4 text-xl font-semibold">
-        Your holdings
-      </h2>
-      <p className="mb-4 text-xs text-slate-400">
-        Average purchase cost includes execution fees. Quotes and purchase-cost
-        fallbacks are identified separately.
-      </p>
-      <ul className="space-y-4 md:hidden">
+      <div className="section-heading">
+        <h2 id="holdings-title" className="section-title">
+          Your holdings
+        </h2>
+        <p className="small-copy">Purchase cost includes execution fees.</p>
+      </div>
+      <ul className="holding-cards">
         {holdings.map((holding) => (
-          <li
-            key={holding.artist.id}
-            className="rounded-2xl border border-white/10 bg-slate-900 p-5"
-          >
-            <Link
-              className="touch flex items-center text-lg font-semibold"
-              href={`/artists/${holding.artist.id}`}
-            >
-              {holding.artist.name}
-            </Link>
-            <dl className="mt-3 space-y-3 text-sm">
-              {values(holding).map(([label, value]) => (
-                <div key={label} className="flex justify-between gap-4">
-                  <dt className="text-slate-400">{label}</dt>
-                  <dd className="max-w-[60%] text-right tabular-nums">
-                    {value}
-                  </dd>
+          <li key={holding.artist.id} className="panel">
+            <div className="flex justify-between items-start gap-3">
+              <div>
+                <Link
+                  className="touch inline-flex items-center font-semibold text-lg"
+                  href={`/artists/${holding.artist.id}`}
+                >
+                  {holding.artist.name}
+                </Link>
+                <p className="small-copy">
+                  {holding.artist.symbol} · {holding.quantity}{" "}
+                  {holding.quantity === 1 ? "share" : "shares"}
+                </p>
+              </div>
+              <Icon name="record" />
+            </div>
+            <dl className="holding-metrics">
+              {[
+                ["Avg. purchase cost", formatMoney(holding.averageCostCents)],
+                ["Purchase value", formatMoney(cost(holding))],
+                [
+                  "Current unit value",
+                  formatMoney(holding.currentPriceCents ?? null),
+                ],
+                ["Holding value", formatMoney(holding.currentValueCents)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
                 </div>
               ))}
             </dl>
-            {holding.valuationBasis === "purchase_cost" && (
-              <p className="mt-4 text-sm text-amber-100">
-                Valued at purchase cost—current quote unavailable.
-              </p>
-            )}
-            {holding.valuationBasis === "stale_quote" && (
-              <p className="mt-4 text-sm text-amber-100">
-                Uses a stale market quote.
-              </p>
-            )}
-            {holding.costBasisMethod === "legacy_average" && (
-              <p className="mt-3 text-xs text-slate-400">
-                Purchase cost uses the saved legacy average; a complete
-                acquisition ledger is unavailable.
-              </p>
-            )}
+            <HoldingNotice holding={holding} />
+            <dl className="holding-dates">
+              {[
+                ["Last priced", formatTimestamp(holding.quoteAsOf)],
+                ["First purchased", formatTimestamp(holding.firstPurchasedAt)],
+                [
+                  "Last purchased",
+                  formatTimestamp(
+                    holding.lastPurchasedAt ?? holding.firstPurchasedAt,
+                  ),
+                ],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <dt className="text-muted">{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
             <Purchases holding={holding} />
           </li>
         ))}
       </ul>
-      <div className="hidden overflow-x-auto rounded-2xl border border-white/10 md:block">
-        <table className="w-full text-left text-sm">
+      <div
+        className="holdings-table-wrap"
+        tabIndex={0}
+        role="region"
+        aria-label="Holdings details"
+      >
+        <table className="holdings-table">
           <caption className="sr-only">
             Holdings, purchase values and current quote timestamps
           </caption>
           <thead>
             <tr>
               {[
-                "Artist",
-                ...values(holdings[0]).map(([label]) => label),
-                "Purchases",
+                "Artist / shares",
+                "Purchase cost",
+                "Current value",
+                "Last priced",
+                "Purchased",
+                "History",
               ].map((label) => (
-                <th
-                  key={label}
-                  className="whitespace-nowrap p-3 font-medium text-slate-400"
-                >
+                <th key={label} scope="col">
                   {label}
                 </th>
               ))}
@@ -149,28 +186,50 @@ export function HoldingsList({ holdings }: { holdings: Holding[] }) {
           </thead>
           <tbody>
             {holdings.map((holding) => (
-              <tr key={holding.artist.id} className="border-t border-white/10">
-                <th scope="row" className="min-w-40 p-3">
+              <tr key={holding.artist.id}>
+                <th scope="row">
                   <Link
-                    className="touch flex items-center"
+                    className="touch flex items-center font-semibold"
                     href={`/artists/${holding.artist.id}`}
                   >
                     {holding.artist.name}
                   </Link>
-                  {holding.valuationBasis !== "quote" && (
-                    <span className="text-xs font-normal text-amber-100">
-                      {holding.valuationBasis === "purchase_cost"
-                        ? "Valued at purchase cost—current quote unavailable."
-                        : "Stale quote"}
-                    </span>
-                  )}
+                  <p className="small-copy font-normal">
+                    {holding.artist.symbol} · {holding.quantity} shares
+                  </p>
+                  <HoldingNotice holding={holding} />
                 </th>
-                {values(holding).map(([label, value]) => (
-                  <td key={label} className="min-w-28 p-3 tabular-nums">
-                    {value}
-                  </td>
-                ))}
-                <td className="min-w-48 p-3">
+                <td>
+                  <p className="data">{formatMoney(cost(holding))}</p>
+                  <p className="small-copy mt-2">
+                    {formatMoney(holding.averageCostCents)} avg. / share
+                  </p>
+                </td>
+                <td>
+                  <p className="data">
+                    {formatMoney(holding.currentValueCents)}
+                  </p>
+                  <p className="small-copy mt-2">
+                    {formatMoney(holding.currentPriceCents ?? null)} / share
+                  </p>
+                </td>
+                <td>
+                  <p className="small-copy">
+                    {formatTimestamp(holding.quoteAsOf)}
+                  </p>
+                </td>
+                <td>
+                  <p className="small-copy">
+                    First {formatTimestamp(holding.firstPurchasedAt)}
+                  </p>
+                  <p className="small-copy mt-2">
+                    Latest{" "}
+                    {formatTimestamp(
+                      holding.lastPurchasedAt ?? holding.firstPurchasedAt,
+                    )}
+                  </p>
+                </td>
+                <td>
                   <Purchases holding={holding} />
                 </td>
               </tr>

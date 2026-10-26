@@ -17,7 +17,7 @@ export default async function SignupPage({
     >
       <SignUpForm nextPath={next} />
       <Link
-        className="touch mt-4 flex items-center text-sm text-sky-200"
+        className="touch mt-4 flex items-center text-sm text-accent"
         href={`/login?next=${encodeURIComponent(next)}`}
       >
         Already have an account? Sign in

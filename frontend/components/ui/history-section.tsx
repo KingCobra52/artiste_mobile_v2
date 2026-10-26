@@ -14,9 +14,9 @@ export async function HistorySection({
     history = await apiRequest<HistoryData>(path);
   } catch {
     return (
-      <section className="rounded-2xl border border-white/10 p-5">
+      <section className="rounded-2xl border border-line p-5">
         <h2 className="font-semibold">{title}</h2>
-        <p role="status" className="mt-2 text-sm text-slate-400">
+        <p role="status" className="mt-2 text-sm text-muted">
           History could not be loaded. Use the button below to retry.
         </p>
         <RetryButton />
