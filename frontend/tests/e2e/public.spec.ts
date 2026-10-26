@@ -60,8 +60,11 @@ test("protected routes preserve the intended destination", async ({ page }) => {
   ]) {
     await page.goto(path);
     await expect(page).toHaveURL(
-      new RegExp(`/login\\?next=${encodeURIComponent(path)}$`),
+      new RegExp(`/onboarding\\?next=${encodeURIComponent(path)}$`),
     );
+    await expect(page.getByRole("navigation", { name: "Primary navigation" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Market", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Portfolio", exact: true })).toHaveCount(0);
   }
 });
 test("auth pages fit small phones without horizontal overflow", async ({

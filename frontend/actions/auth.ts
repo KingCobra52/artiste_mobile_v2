@@ -283,5 +283,5 @@ export async function resendEmail(
 export async function logout() {
   const client = await createClient();
   if (client) await client.auth.signOut();
-  redirect("/login");
+  redirect("/onboarding");
 }

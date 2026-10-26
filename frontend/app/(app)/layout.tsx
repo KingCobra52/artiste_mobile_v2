@@ -19,7 +19,7 @@ export default async function ProtectedLayout({
 
   const supabase = await createClient();
   const { data, error } = await supabase!.auth.getUser();
-  if (error || !data.user) redirect("/login");
+  if (error || !data.user) redirect("/onboarding");
   if (!isVerifiedUser(data.user)) redirect("/login?verify=1");
 
   let required = false;
@@ -30,10 +30,11 @@ export default async function ProtectedLayout({
     /* Data errors remain local to each page. */
   }
 
+  if (required) return <OnboardingGate required />;
+
   return (
     <div className="min-h-dvh">
       <AppHeader />
-      <OnboardingGate required={required} />
       <a href="#main-content" className="skip-link">
         Skip to content
       </a>

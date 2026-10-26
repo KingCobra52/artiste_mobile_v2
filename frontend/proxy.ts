@@ -15,26 +15,14 @@ export async function proxy(request: NextRequest) {
   );
 
   if (isProtected && !authenticated) {
-    const loginUrl = new URL("/login", request.url);
+    const onboardingUrl = new URL("/onboarding", request.url);
     const destination = request.nextUrl.clone();
     destination.searchParams.delete("_rsc");
-    loginUrl.searchParams.set(
+    onboardingUrl.searchParams.set(
       "next",
       safeNextPath(pathname + destination.search),
     );
-    return copyCookies(response, NextResponse.redirect(loginUrl));
-  }
-
-  if (pathname === "/login" && authenticated) {
-    return copyCookies(
-      response,
-      NextResponse.redirect(
-        new URL(
-          safeNextPath(request.nextUrl.searchParams.get("next")),
-          request.url,
-        ),
-      ),
-    );
+    return copyCookies(response, NextResponse.redirect(onboardingUrl));
   }
 
   return response;
