@@ -14,7 +14,7 @@ const incomplete = { version: 1, step: 1, completed: false };
 beforeEach(() => {
   vi.resetAllMocks();
   getUser.mockResolvedValue({
-    data: { user: { id: "a", phone_confirmed_at: "today" } },
+    data: { user: { id: "a", email_confirmed_at: "today" } },
     error: null,
   });
   apiRequest.mockResolvedValue(incomplete);

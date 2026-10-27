@@ -29,14 +29,18 @@ test("Get started opens sign up with the intended destination", async ({
     page.getByRole("heading", { name: "Create your account" }),
   ).toBeVisible();
 });
-test("phone signup and password recovery use accessible phone inputs", async ({
+test("signup, login, and password recovery use email inputs", async ({
   page,
 }) => {
   await page.goto("/signup");
   await expect(
     page.getByRole("heading", { name: "Create your account" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Phone number")).toHaveAttribute("type", "tel");
+  await expect(page.getByLabel("Email", { exact: true })).toHaveAttribute(
+    "type",
+    "email",
+  );
+  await expect(page.getByLabel("Phone number")).toHaveCount(0);
   await expect(page.getByLabel("Password", { exact: true })).toHaveAttribute(
     "minlength",
     "8",
@@ -46,9 +50,8 @@ test("phone signup and password recovery use accessible phone inputs", async ({
   await expect(
     page.getByRole("heading", { name: "Recover your account" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Phone number")).toBeVisible();
-  await page.getByRole("button", { name: "Existing email account" }).click();
   await expect(page.getByLabel("Email", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Phone number")).toHaveCount(0);
 });
 test("protected routes preserve the intended destination", async ({ page }) => {
   for (const path of [
@@ -99,7 +102,7 @@ test("interrupted signup keeps form progress and prevents duplicate submission",
   page,
 }) => {
   await page.goto("/signup");
-  await page.getByLabel("Phone number").fill("2125550100");
+  await page.getByLabel("Email", { exact: true }).fill("new@example.com");
   await page
     .getByLabel("Password", { exact: true })
     .fill("local-test-password");
@@ -117,7 +120,9 @@ test("interrupted signup keeps form progress and prevents duplicate submission",
   await expect(
     page.getByRole("alert").filter({ hasText: "Please try again" }),
   ).toBeVisible();
-  await expect(page.getByLabel("Phone number")).toHaveValue("2125550100");
+  await expect(page.getByLabel("Email", { exact: true })).toHaveValue(
+    "new@example.com",
+  );
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
     "local-test-password",
   );

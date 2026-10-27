@@ -1,6 +1,6 @@
 # Focused upgrade
 
-Current phone authentication, onboarding, pricing, portfolio and local integration setup are documented in [the focused upgrade guide](../docs/focused-upgrade.md). Trading starts in shadow mode. Real SMS delivery requires a configured provider.
+Current email authentication, onboarding, pricing, portfolio and local integration setup are documented in [the focused upgrade guide](../docs/focused-upgrade.md). Trading starts in shadow mode. Production email delivery requires configured SMTP.
 
 # Artiste web app
 
@@ -33,7 +33,7 @@ Without the public Supabase values, the app renders a setup message instead of c
 
 ## Authentication
 
-New accounts use phone/password signup with SMS verification. Recovery verifies an SMS code before changing the password. Existing accounts retain email login/recovery and can attach a verified phone without changing their UUID or portfolio. Configure a supported SMS provider (Twilio by default), the site URL and callback allowlist before rollout. Product routes verify Supabase claims; FastAPI independently verifies access tokens.
+Accounts use email and password for signup and login. New accounts verify their email before accessing the product; password recovery sends a time-limited email link. Existing account UUIDs and their portfolios, trades, and history remain intact. Configure production SMTP, the site URL, and callback allowlist before rollout. Product routes verify confirmed email claims; FastAPI independently verifies access tokens.
 
 ## Market and paper trading
 

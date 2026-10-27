@@ -6,7 +6,7 @@ export default function ResetPage() {
   return (
     <AuthPage
       title="Set a new password"
-      description="Use the recovery session from your email to choose a new password."
+      description="Use the verified email recovery session to choose a new password."
     >
       <AuthFlow mode="reset" />
     </AuthPage>

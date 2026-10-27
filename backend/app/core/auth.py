@@ -30,9 +30,8 @@ async def verify_access_token(client: object, token: str) -> CurrentUser:
         user = getattr(auth_response, "user", None)
         if user is None or str(user.id) != str(user_id):
             raise ValueError("Authenticated user does not match token")
-        if getattr(user, "is_anonymous", False) or not (
-            getattr(user, "phone_confirmed_at", None)
-            or getattr(user, "email_confirmed_at", None)
+        if getattr(user, "is_anonymous", False) or not getattr(
+            user, "email_confirmed_at", None
         ):
             raise AppError(
                 status_code=403,

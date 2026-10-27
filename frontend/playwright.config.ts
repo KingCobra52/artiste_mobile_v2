@@ -24,18 +24,18 @@ export default defineConfig({
   projects: [
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
-      name: "public-phone",
+      name: "public-mobile",
       testMatch: /(?:public|auth-handoff)\.spec\.ts/,
       use: { storageState: { cookies: [], origins: [] } },
     },
     {
-      name: "authenticated-phone",
+      name: "authenticated-mobile",
       testMatch: /app\.spec\.ts/,
       dependencies: ["setup"],
       use: { storageState: authFile },
     },
     {
-      name: "public-webkit-phone",
+      name: "public-webkit-mobile",
       testMatch: /(?:public|auth-handoff)\.spec\.ts/,
       use: {
         browserName: "webkit",
@@ -43,7 +43,7 @@ export default defineConfig({
       },
     },
     {
-      name: "authenticated-webkit-phone",
+      name: "authenticated-webkit-mobile",
       testMatch: /app\.spec\.ts/,
       dependencies: ["setup"],
       use: { browserName: "webkit", storageState: authFile },

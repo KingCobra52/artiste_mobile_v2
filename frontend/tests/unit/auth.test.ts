@@ -3,9 +3,7 @@ const { auth, createClient } = vi.hoisted(() => ({
   auth: {
     signUp: vi.fn(),
     signInWithPassword: vi.fn(),
-    verifyOtp: vi.fn(),
     resend: vi.fn(),
-    signInWithOtp: vi.fn(),
     updateUser: vi.fn(),
     signOut: vi.fn(),
     getUser: vi.fn(),
@@ -23,141 +21,158 @@ import {
   switchAccount,
   signup,
   login,
-  verifyPhone,
   requestRecovery,
   resetPassword,
-  attachPhone,
-  resendVerification,
+  resendEmail,
 } from "@/actions/auth";
 import { safeNextPath } from "@/lib/navigation";
+
 function form(values: Record<string, string> = {}) {
   const data = new FormData();
   Object.entries({
-    country: "+1",
-    phone: "2125550100",
+    email: "person@example.com",
     password: "test-password-123",
-    token: "123456",
+    next: "/market",
     ...values,
   }).forEach(([key, value]) => data.set(key, value));
   return data;
 }
+
 beforeEach(() => {
   vi.resetAllMocks();
+  process.env.NEXT_PUBLIC_SITE_URL = "https://artiste.example";
   createClient.mockResolvedValue({ auth });
   Object.values(auth).forEach((fn) =>
     fn.mockResolvedValue({
-      data: { user: { id: "existing-user" } },
+      data: { user: { id: "existing-user" }, session: null },
       error: null,
     }),
   );
 });
-describe("phone authentication", () => {
-  it("signs up with normalized E.164 and never returns the password", async () => {
-    const result = await signup({ error: null }, form());
+
+describe("email and password authentication", () => {
+  it("creates an email account with a confirmation callback and safe destination", async () => {
+    const result = await signup(
+      { error: null },
+      form({ next: "/artists/16?range=month" }),
+    );
     expect(auth.signUp).toHaveBeenCalledWith({
-      phone: "+12125550100",
+      email: "person@example.com",
       password: "test-password-123",
+      options: {
+        emailRedirectTo:
+          "https://artiste.example/auth/callback?next=%2Fartists%2F16%3Frange%3Dmonth",
+      },
     });
-    expect(result.stage).toBe("verify");
+    expect(result).toMatchObject({
+      error: null,
+      stage: "done",
+      email: "person@example.com",
+    });
     expect(JSON.stringify(result)).not.toContain("test-password-123");
   });
-  it("rejects malformed contact/password without a provider call", async () => {
+
+  it("redirects directly when the provider returns a confirmed session", async () => {
+    auth.signUp.mockResolvedValueOnce({
+      data: { user: { id: "existing-user" }, session: { access_token: "x" } },
+      error: null,
+    });
+    await expect(
+      signup({ error: null }, form({ next: "/portfolio" })),
+    ).rejects.toThrow("REDIRECT:/auth/continue?next=%2Fportfolio");
+  });
+
+  it("rejects malformed email or password without a provider call", async () => {
     expect(
-      (await signup({ error: null }, form({ phone: "abc", password: "short" })))
+      (await signup({ error: null }, form({ email: "bad", password: "short" })))
         .error,
     ).toBeTruthy();
     expect(auth.signUp).not.toHaveBeenCalled();
   });
-  it("preserves the intended route after login", async () => {
+
+  it("requires the site URL to build a confirmation callback", async () => {
+    delete process.env.NEXT_PUBLIC_SITE_URL;
+    expect((await signup({ error: null }, form())).error).toContain(
+      "verification is not configured",
+    );
+    expect(auth.signUp).not.toHaveBeenCalled();
+  });
+
+  it("signs in existing email accounts and preserves the destination", async () => {
     await expect(
       login({ error: null }, form({ next: "/artists/16?range=month" })),
     ).rejects.toThrow(
       "REDIRECT:/auth/continue?next=%2Fartists%2F16%3Frange%3Dmonth",
     );
-  });
-  it("retains login for existing email accounts", async () => {
-    await expect(
-      login(
-        { error: null },
-        form({ method: "email", email: "existing@example.com" }),
-      ),
-    ).rejects.toThrow("REDIRECT:");
     expect(auth.signInWithPassword).toHaveBeenCalledWith({
-      email: "existing@example.com",
+      email: "person@example.com",
       password: "test-password-123",
     });
   });
-  it("does not create accounts during SMS recovery", async () => {
-    await requestRecovery({ error: null }, form());
-    expect(auth.signInWithOtp).toHaveBeenCalledWith({
-      phone: "+12125550100",
-      options: { shouldCreateUser: false },
-    });
+
+  it("never accepts a phone-only sign-in submission", async () => {
+    expect(
+      (await login(
+        { error: null },
+        form({ email: "", phone: "+12125550100" }),
+      )).error,
+    ).toBeTruthy();
+    expect(auth.signInWithPassword).not.toHaveBeenCalled();
   });
-  it.each(["expired", "incorrect", "reused"])(
-    "does not change password for an %s code",
-    async () => {
-      auth.verifyOtp.mockResolvedValue({ error: { message: "expired" } });
-      expect((await resetPassword({ error: null }, form())).error).toBeTruthy();
-      expect(auth.updateUser).not.toHaveBeenCalled();
-    },
-  );
-  it("resets password only after SMS verification and signs out sessions", async () => {
+
+  it("requests email recovery without revealing whether the account exists", async () => {
+    const result = await requestRecovery({ error: null }, form());
+    expect(auth.resetPasswordForEmail).toHaveBeenCalledWith(
+      "person@example.com",
+      {
+        redirectTo:
+          "https://artiste.example/auth/callback?recovery=1",
+      },
+    );
+    expect(result.success).toContain("If an account exists");
+  });
+
+  it("requires a verified recovery session before changing the password", async () => {
+    auth.getUser.mockResolvedValueOnce({ data: { user: null }, error: null });
+    const result = await resetPassword({ error: null }, form());
+    expect(result.error).toContain("recovery session expired");
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("updates the password after email verification and signs out old sessions", async () => {
     await expect(resetPassword({ error: null }, form())).rejects.toThrow(
       "REDIRECT:/login?reset=1",
     );
-    expect(auth.verifyOtp).toHaveBeenCalledWith({
-      phone: "+12125550100",
-      token: "123456",
-      type: "sms",
-    });
     expect(auth.updateUser).toHaveBeenCalledWith({
       password: "test-password-123",
     });
     expect(auth.signOut).toHaveBeenCalledWith({ scope: "global" });
   });
-  it("attaches a phone to the existing identity without signup", async () => {
-    await attachPhone({ error: null }, form());
-    expect(auth.updateUser).toHaveBeenCalledWith({ phone: "+12125550100" });
-    expect(auth.signUp).not.toHaveBeenCalled();
-  });
-  it("rejects a phone-change result belonging to another identity", async () => {
-    auth.verifyOtp.mockResolvedValue({
-      data: { user: { id: "other" } },
-      error: null,
+
+  it("resends signup verification to the normalized callback", async () => {
+    const result = await resendEmail(
+      { error: null },
+      form({ next: "/portfolio" }),
+    );
+    expect(auth.resend).toHaveBeenCalledWith({
+      type: "signup",
+      email: "person@example.com",
+      options: {
+        emailRedirectTo:
+          "https://artiste.example/auth/callback?next=%2Fportfolio",
+      },
     });
-    expect(
-      (await verifyPhone({ error: null }, form({ purpose: "attach" }))).error,
-    ).toBeTruthy();
-    expect(auth.signOut).toHaveBeenCalled();
+    expect(result.retryAfter).toBe(60);
   });
-  it("exposes a retry interval for rate limits", async () => {
+
+  it("exposes a retry interval when email verification is rate limited", async () => {
     auth.resend.mockResolvedValue({ error: { status: 429 } });
-    const result = await resendVerification({ error: null }, form());
+    const result = await resendEmail({ error: null }, form());
     expect(result.retryAfter).toBe(60);
     expect(result.error).toContain("wait");
   });
 });
-describe("verification retry handling", () => {
-  it("returns verified destination and cooldown when resending", async () => {
-    const result = await resendVerification({ error: null }, form());
-    expect(result).toMatchObject({
-      phone: "+12125550100",
-      stage: "verify",
-      retryAfter: 60,
-    });
-    expect(auth.resend).toHaveBeenCalledWith({
-      type: "sms",
-      phone: "+12125550100",
-    });
-  });
-  it("shows temporary delivery failures during recovery", async () => {
-    auth.signInWithOtp.mockResolvedValue({ error: { status: 500 } });
-    expect((await requestRecovery({ error: null }, form())).error).toContain(
-      "delivery",
-    );
-  });
-});
+
 describe("redirect normalization", () => {
   it.each([
     "//example.net",
@@ -174,7 +189,8 @@ describe("redirect normalization", () => {
   it("preserves a safe relative destination", () =>
     expect(safeNextPath("/artists/16?range=month#history")).toBe(
       "/artists/16?range=month#history",
-    ));
+    ),
+  );
 });
 
 describe("account switching", () => {
@@ -190,24 +206,4 @@ describe("account switching", () => {
     expect(result.error).toContain("try again");
     expect(result.destination).toBeUndefined();
   });
-  it("uses the handoff after phone verification", async () => {
-    await expect(
-      verifyPhone({ error: null }, form({ next: "/portfolio" })),
-    ).rejects.toThrow("REDIRECT:/auth/continue?next=%2Fportfolio");
-  });
-});
-
-describe("phone verification failures", () => {
-  it.each(["expired", "incorrect", "already used"])(
-    "keeps an %s OTP on verification",
-    async (message) => {
-      auth.verifyOtp.mockResolvedValue({
-        data: { user: null },
-        error: { message, status: 403 },
-      });
-      const result = await verifyPhone({ error: null }, form());
-      expect(result.error).toContain("incorrect, expired or already used");
-      expect(result.stage).not.toBe("done");
-    },
-  );
 });

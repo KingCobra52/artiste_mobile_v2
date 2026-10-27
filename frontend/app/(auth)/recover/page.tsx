@@ -6,7 +6,7 @@ export default function RecoverPage() {
   return (
     <AuthPage
       title="Recover your account"
-      description="Verify your phone by SMS to set a new password. Existing email accounts can request a recovery link."
+      description="Request an email link to set a new password."
     >
       <AuthFlow mode="recover" />
     </AuthPage>

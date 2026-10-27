@@ -14,7 +14,7 @@ export default async function LoginPage({
   return (
     <AuthPage
       title="Welcome back"
-      description="Sign in with your phone number and password, or use your existing email account."
+      description="Sign in with your email and password."
     >
       {params.error && (
         <p role="alert" className="mt-3 text-danger">
@@ -23,8 +23,8 @@ export default async function LoginPage({
       )}
       {params.verify && (
         <p role="status" className="mt-3 text-accent">
-          Verify your account before entering the market. Use the verification
-          option below if you need another code.
+          Verify your email before entering the market. Use the resend option
+          below if you need another link.
         </p>
       )}
       {params.reset && (

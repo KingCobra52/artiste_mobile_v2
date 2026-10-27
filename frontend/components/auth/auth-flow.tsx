@@ -1,99 +1,113 @@
 "use client";
+
 import Link from "next/link";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useRef, useState, useTransition, useEffect } from "react";
 import {
   login,
   signup,
-  verifyPhone,
-  resendVerification,
   requestRecovery,
   resetPassword,
-  attachPhone,
   resendEmail,
   type AuthState,
 } from "@/actions/auth";
+
+type AuthMode = "login" | "signup" | "recover" | "reset";
 
 export function AuthFlow({
   mode,
   nextPath = "/market",
 }: {
-  mode: "login" | "signup" | "recover" | "reset" | "attach";
+  mode: AuthMode;
   nextPath?: string;
 }) {
   const hydrated = useHydrated();
   const [state, setState] = useState<AuthState>({ error: null });
-  const [stage, setStage] = useState("entry");
-  const [method, setMethod] = useState(mode === "reset" ? "email" : "phone");
-  const [phone, setPhone] = useState("");
+  const [stage, setStage] = useState<"entry" | "done">("entry");
   const [email, setEmail] = useState("");
   const [until, setUntil] = useState(0);
   const [clock, setClock] = useState(0);
   const [pending, start] = useTransition();
   const form = useRef<HTMLFormElement>(null);
+
   useEffect(() => {
     const timer = setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+
   const cooldown = Math.max(0, Math.ceil((until - clock) / 1000));
   function accept(result: AuthState) {
     setState(result);
     if (result.stage) setStage(result.stage);
-    if (result.phone) setPhone(result.phone);
+    if (result.email) setEmail(result.email);
     if (result.retryAfter) {
       const now = Date.now();
       setClock(now);
       setUntil(now + result.retryAfter * 1000);
     }
   }
+
+  function emailForm() {
+    const data = new FormData();
+    data.set("email", email);
+    data.set("next", nextPath);
+    return data;
+  }
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (pending) return;
     const data = new FormData(event.currentTarget);
     const action =
-      mode === "login" && stage === "entry"
+      mode === "login"
         ? login
-        : mode === "reset"
-          ? resetPassword
-          : stage === "verify"
-            ? mode === "recover"
-              ? resetPassword
-              : verifyPhone
-            : mode === "signup"
-              ? signup
-              : mode === "attach"
-                ? attachPhone
-                : requestRecovery;
+        : mode === "signup"
+          ? signup
+          : mode === "recover"
+            ? requestRecovery
+            : resetPassword;
     start(async () => {
       try {
         accept(await action({ error: null }, data));
       } catch {
-        setState({
-          error: "We could not reach the service. Please try again.",
-        });
+        setState({ error: "We could not reach the service. Please try again." });
       }
     });
   }
-  function resend() {
-    if (!form.current || cooldown || pending) return;
-    const data = new FormData(form.current);
+
+  function resendVerification() {
+    if (!email || cooldown || pending) return;
     start(async () => {
       try {
-        accept(
-          await (mode === "recover" ? requestRecovery : resendVerification)(
-            { error: null },
-            data,
-          ),
-        );
+        accept(await resendEmail({ error: null }, emailForm()));
       } catch {
-        setState({ error: "The code could not be requested. Try again." });
+        setState({ error: "Verification could not be requested. Try again." });
       }
     });
   }
+
   if (stage === "done")
     return (
-      <div className="space-y-4">
+      <div className="mt-6 space-y-4" aria-busy={pending}>
         <p role="status">{state.success}</p>
+        {mode === "signup" && email && (
+          <>
+            <p>
+              Confirmation email sent to <strong>{email}</strong>.
+            </p>
+            {state.error && <p role="alert">{state.error}</p>}
+            <button
+              type="button"
+              className="touch w-full rounded-xl border border-line px-4"
+              disabled={pending || cooldown > 0}
+              onClick={resendVerification}
+            >
+              {cooldown
+                ? `Resend verification in ${cooldown}s`
+                : "Resend verification email"}
+            </button>
+          </>
+        )}
         <Link
           className="touch action-primary inline-flex items-center rounded-xl px-5"
           href="/login"
@@ -102,11 +116,9 @@ export function AuthFlow({
         </Link>
       </div>
     );
-  const password =
-    (mode === "login" && stage === "entry") ||
-    (mode === "signup" && stage === "entry") ||
-    mode === "reset" ||
-    (mode === "recover" && stage === "verify");
+
+  const password = mode === "login" || mode === "signup" || mode === "reset";
+  const newPassword = mode === "signup" || mode === "reset";
   return (
     <form
       ref={form}
@@ -116,131 +128,36 @@ export function AuthFlow({
     >
       <fieldset disabled={!hydrated} className="min-w-0 space-y-5">
         <input type="hidden" name="next" value={nextPath} />
-        <input type="hidden" name="method" value={method} />
-        <input
-          type="hidden"
-          name="purpose"
-          value={mode === "attach" ? "attach" : "signup"}
-        />
-        {(mode === "login" || mode === "recover") && stage === "entry" && (
-          <div
-            className="auth-methods"
-            role="group"
-            aria-label="Sign-in method"
-          >
-            {["phone", "email"].map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={method === value}
-                className="touch"
-                onClick={() => {
-                  setMethod(value);
-                  setState({ error: null });
-                }}
-              >
-                {value === "phone" ? "Phone" : "Existing email account"}
-              </button>
-            ))}
-          </div>
-        )}
-        {stage === "verify" ? (
-          <>
-            <p>
-              Code sent to <strong>•••• {phone.slice(-4)}</strong>
-            </p>
-            <input type="hidden" name="country" value="+1" />
-            <input type="hidden" name="phone" value={phone} />
-            <label className="block">
-              SMS verification code
-              <input
-                className="auth-input mt-2"
-                name="token"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                pattern="[0-9]{6}"
-                maxLength={6}
-                required
-              />
-            </label>
-            <button
-              className="touch text-sm text-accent underline"
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                setStage("entry");
-                setState({ error: null });
-              }}
-            >
-              Correct phone number
-            </button>
-          </>
-        ) : (
-          mode !== "reset" &&
-          (method === "phone" ? (
-            <div className="phone-fields">
-              <label>
-                Country code
-                <input
-                  className="auth-input mt-2"
-                  name="country"
-                  aria-label="Country code"
-                  defaultValue="+1"
-                  type="tel"
-                  autoComplete="tel-country-code"
-                  required
-                />
-              </label>
-              <label>
-                Phone number
-                <input
-                  className="auth-input mt-2"
-                  type="tel"
-                  name="phone"
-                  autoComplete="tel-national"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </label>
-            </div>
-          ) : (
-            <label className="block">
-              Email
-              <input
-                className="auth-input mt-2"
-                type="email"
-                name="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </label>
-          ))
+        {mode !== "reset" && (
+          <label className="block">
+            Email
+            <input
+              className="auth-input mt-2"
+              type="email"
+              name="email"
+              aria-label="Email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              maxLength={254}
+              required
+            />
+          </label>
         )}
         {password && (
           <label className="block">
-            {mode === "recover" || mode === "reset"
-              ? "New password"
-              : "Password"}
+            {mode === "reset" ? "New password" : "Password"}
             <input
               className="auth-input mt-2"
               type="password"
               name="password"
-              aria-label={
-                mode === "recover" || mode === "reset"
-                  ? "New password"
-                  : "Password"
-              }
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
-              minLength={mode === "login" ? undefined : 8}
+              aria-label={mode === "reset" ? "New password" : "Password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={newPassword ? 8 : undefined}
               maxLength={128}
               required
             />
-            {mode !== "login" && (
+            {newPassword && (
               <span className="mt-2 block text-[0.8125rem] text-muted">
                 Use 8–128 characters.
               </span>
@@ -267,86 +184,32 @@ export function AuthFlow({
         >
           {pending
             ? "Please wait…"
-            : mode === "login" && stage === "entry"
+            : mode === "login"
               ? "Sign in"
-              : mode === "reset" || (mode === "recover" && stage === "verify")
-                ? "Set new password"
-                : stage === "verify"
-                  ? "Verify phone"
-                  : mode === "signup"
-                    ? "Create account"
-                    : mode === "attach"
-                      ? "Attach phone"
-                      : "Send recovery code or link"}
+              : mode === "signup"
+                ? "Create account"
+                : mode === "recover"
+                  ? "Send recovery link"
+                  : "Set new password"}
         </button>
-        {stage === "verify" && (
-          <button
-            type="button"
-            onClick={resend}
-            disabled={pending || cooldown > 0}
-            className="touch w-full rounded-xl border border-line px-4"
-          >
-            {cooldown
-              ? `Resend code in ${cooldown}s`
-              : "Resend verification code"}
-          </button>
-        )}
-        {mode === "login" && stage === "entry" && (
+        {mode === "login" && (
           <>
-            {method === "phone" && (
-              <button
-                type="button"
-                disabled={pending || cooldown > 0}
-                className="touch text-sm text-accent"
-                onClick={() => {
-                  if (!form.current) return;
-                  const data = new FormData(form.current);
-                  start(async () => {
-                    try {
-                      accept(await resendVerification({ error: null }, data));
-                    } catch {
-                      setState({
-                        error:
-                          "Verification could not be requested. Try again.",
-                      });
-                    }
-                  });
-                }}
-              >
-                Verify an unconfirmed phone account
-              </button>
-            )}
             <Link
               className="touch flex items-center text-sm text-accent"
               href={`/recover?next=${encodeURIComponent(nextPath)}`}
             >
               Forgot password?
             </Link>
-            {method === "email" && (
-              <button
-                type="button"
-                className="touch text-sm text-accent"
-                disabled={pending || cooldown > 0}
-                onClick={() => {
-                  if (!form.current) return;
-                  const data = new FormData(form.current);
-                  start(async () => {
-                    try {
-                      accept(await resendEmail({ error: null }, data));
-                    } catch {
-                      setState({
-                        error:
-                          "Verification could not be requested. Try again.",
-                      });
-                    }
-                  });
-                }}
-              >
-                {cooldown
-                  ? `Resend verification in ${cooldown}s`
-                  : "Resend email verification"}
-              </button>
-            )}
+            <button
+              type="button"
+              className="touch text-sm text-accent"
+              disabled={pending || cooldown > 0}
+              onClick={resendVerification}
+            >
+              {cooldown
+                ? `Resend verification in ${cooldown}s`
+                : "Resend email verification"}
+            </button>
           </>
         )}
       </fieldset>

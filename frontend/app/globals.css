@@ -1496,19 +1496,6 @@ a {
   flex: 1 1 8rem;
   min-width: 0;
 }
-.phone-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-.phone-fields > label:first-child {
-  flex: 1 1 5rem;
-  min-width: 0;
-}
-.phone-fields > label:last-child {
-  flex: 3 1 10rem;
-  min-width: 0;
-}
 @media (max-width: 767px) {
   .onboarding-layout,
   .auth-layout {

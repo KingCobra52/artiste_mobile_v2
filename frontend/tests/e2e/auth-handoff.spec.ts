@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
 
 // These tests create accounts only in the isolated stack prepared by auth_flow_checks.
 test.skip(
@@ -8,7 +9,6 @@ test.skip(
 
 async function login(page: Page, next = "/market") {
   await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.getByRole("button", { name: "Existing email account" }).click();
   await page
     .getByLabel("Email", { exact: true })
     .fill(process.env.PLAYWRIGHT_TEST_EMAIL!);
@@ -17,6 +17,44 @@ async function login(page: Page, next = "/market") {
     .fill(process.env.PLAYWRIGHT_TEST_PASSWORD!);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`${next}$`));
+}
+
+async function waitForEmailLink(email: string, subject: string) {
+  const mailpit = process.env.PLAYWRIGHT_MAILPIT_URL;
+  if (!mailpit) throw new Error("PLAYWRIGHT_MAILPIT_URL is required.");
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const searchUrl = new URL("/api/v1/search", mailpit);
+    searchUrl.searchParams.set("query", `to:${email}`);
+    searchUrl.searchParams.set("limit", "20");
+    const response = await fetch(searchUrl);
+    if (response.ok) {
+      const result = (await response.json()) as {
+        messages?: Array<{ ID: string; Subject: string }>;
+      };
+      const message = result.messages?.find((item) =>
+        item.Subject.toLowerCase().includes(subject.toLowerCase()),
+      );
+      if (message) {
+        const detailsResponse = await fetch(
+          new URL(`/api/v1/message/${message.ID}`, mailpit),
+        );
+        if (detailsResponse.ok) {
+          const details = (await detailsResponse.json()) as {
+            HTML?: string;
+            Text?: string;
+          };
+          const content = `${details.HTML ?? ""}\n${details.Text ?? ""}`;
+          const links = [...content.matchAll(/https?:\/\/[^\s"'<>]+/g)].map(
+            (match) => match[0].replaceAll("&amp;", "&"),
+          );
+          const link = links.find((value) => value.includes("/auth/v1/verify"));
+          if (link) return link;
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`No ${subject} email arrived for the test account.`);
 }
 
 test("onboarding hands a completed account to account choice and keeps replay sequential", async ({
@@ -100,45 +138,44 @@ test("handoff failures offer Retry without entering the app", async ({
   await expect(page).toHaveURL(/\/portfolio$/);
 });
 
-test("phone signup verifies OTP and consumes anonymous onboarding without replay", async ({
+test("email signup verification and password recovery preserve onboarding", async ({
   page,
-  browserName,
 }) => {
-  const phone = browserName === "webkit" ? "2025550192" : "2025550191";
-  await page.goto("/onboarding?next=%2Fportfolio");
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await page.getByRole("button", { name: "Get started" }).click();
-  await page.getByLabel("Phone number").fill(phone);
-  await page
-    .getByLabel("Password", { exact: true })
-    .fill("Local-auth-test-only-123");
-  await page
-    .getByRole("button", { name: "Create account", exact: true })
-    .click();
-  await expect(page.getByLabel("SMS verification code")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Resend code in/ }),
-  ).toBeDisabled();
-  const protectedPage = await page.context().newPage();
-  await protectedPage.goto("/market");
-  await expect(protectedPage).toHaveURL(/\/onboarding/);
-  await protectedPage.close();
-  await page.getByLabel("SMS verification code").fill("000000");
-  await page.getByRole("button", { name: "Verify phone", exact: true }).click();
-  await expect(
-    page.getByRole("alert").filter({ hasText: "incorrect" }),
-  ).toContainText("incorrect, expired or already used");
-  await expect(page).toHaveURL(/\/signup/);
-  await page.getByLabel("SMS verification code").fill("123456");
-  await page.getByRole("button", { name: "Verify phone", exact: true }).click();
+  const email = `auth-${randomUUID()}@example.test`;
+  const initialPassword = "Local-auth-test-only-123";
+  const recoveredPassword = "Local-auth-recovered-456";
+  await page.goto("/signup?next=%2Fportfolio");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "artiste:onboarding:v1",
+      JSON.stringify({ version: 1, step: 2, completed: true }),
+    ),
+  );
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(initialPassword);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("status")).toContainText("Check your email");
+  await expect(page.getByRole("button", { name: "Resend verification" })).toBeDisabled();
+
+  await page.goto(await waitForEmailLink(email, "confirm"));
   await expect(page).toHaveURL(/\/portfolio$/);
   expect(
     await page.evaluate(() => localStorage.getItem("artiste:onboarding:v1")),
   ).toBeNull();
-  await page.reload();
-  await expect(page).toHaveURL(/\/portfolio$/);
-  await page.goto("/auth/continue?next=%2Fportfolio");
+
+  await page.goto("/recover");
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByRole("button", { name: "Send recovery link" }).click();
+  await expect(page.getByRole("status")).toContainText("If an account exists");
+  await page.goto(await waitForEmailLink(email, "reset password"));
+  await expect(page).toHaveURL(/\/reset-password$/);
+  await page.getByLabel("New password").fill(recoveredPassword);
+  await page.getByRole("button", { name: "Set new password" }).click();
+  await expect(page).toHaveURL(/\/login\?reset=1$/);
+
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Password", { exact: true }).fill(recoveredPassword);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/portfolio$/);
 });
 

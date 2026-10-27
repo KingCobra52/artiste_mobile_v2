@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PROJECT = Path(tempfile.gettempdir()) / "artiste-auth-tests"
 ENV_FILE = PROJECT / "test-env.json"
 CLI = str(ROOT / "node_modules/.bin/supabase")
-PHONES = ("12025550191", "12025550192")
 
 
 def cli(*args):
@@ -35,34 +34,14 @@ def prepare():
     source = re.sub(r"^project_id = .*$", 'project_id = "artiste_auth_tests"', source, flags=re.M)
     source = re.sub(r"\b543(\d{2})\b", r"553\1", source)
     source = source.replace("127.0.0.1:3000", "localhost:3102")
-    # Only this disposable project's phone settings are overridden.
-    start = source.index("[auth.sms]\n")
-    end = source.index("\n[auth.sms.twilio]", start)
+    # Require email confirmations only in this disposable test project.
+    start = source.index("[auth.email]\n")
+    end = source.index("\n[auth.", start + 1)
     section = source[start:end]
-    section = re.sub(r"^enable_signup = .*$", "enable_signup = true", section, flags=re.M)
     section = re.sub(
         r"^enable_confirmations = .*$", "enable_confirmations = true", section, flags=re.M
     )
-    section = re.sub(r"^max_frequency = .*$", 'max_frequency = "1s"', section, flags=re.M)
-    section += "\n[auth.sms.test_otp]\n" + "".join(f'{phone} = "123456"\n' for phone in PHONES)
     source = source[:start] + section + source[end:]
-    # CLI phone auth also needs an enabled provider. Fixed OTP numbers skip delivery.
-    start = source.index("[auth.sms.twilio]\n")
-    end = source.index("\n[auth.mfa]", start)
-    source = (
-        source[:start]
-        + "\n".join(
-            [
-                "[auth.sms.twilio]",
-                "enabled = true",
-                'account_sid = "AC00000000000000000000000000000000"',
-                'message_service_sid = "MG00000000000000000000000000000000"',
-                'auth_token = "local-test-placeholder"',
-                "",
-            ]
-        )
-        + source[end:]
-    )
     if (project_supabase / "config.toml").exists():
         cli("stop")
     (project_supabase / "config.toml").write_text(source)
@@ -81,9 +60,6 @@ def prepare():
         raise RuntimeError("Auth checks require the isolated local test stack")
     client = create_client(settings["API_URL"], settings["SERVICE_ROLE_KEY"])
     users = client.auth.admin.list_users()
-    for user in users:
-        if user.phone in PHONES:
-            client.auth.admin.delete_user(user.id)
     password = secrets.token_urlsafe(24)
     email = "onboarding-test@example.com"
     existing = next((user for user in users if user.email == email), None)
@@ -108,6 +84,7 @@ def prepare():
         "PLAYWRIGHT_TEST_EMAIL": email,
         "PLAYWRIGHT_TEST_PASSWORD": password,
         "PLAYWRIGHT_AUTH_FLOW_TESTS": "1",
+        "PLAYWRIGHT_MAILPIT_URL": "http://127.0.0.1:55324",
         "PLAYWRIGHT_BASE_URL": "http://localhost:3102",
         "ARTISTE_NEXT_DIST_DIR": ".next-auth-tests",
     }

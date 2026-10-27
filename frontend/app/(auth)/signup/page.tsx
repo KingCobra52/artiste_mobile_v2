@@ -20,9 +20,9 @@ export default async function SignupPage({
   if (user && !isVerifiedUser(user))
     redirect(`/login?verify=1&next=${encodeURIComponent(next)}`);
   if (user && isVerifiedUser(user)) {
-    const account = user.phone
-      ? `•••• ${user.phone.slice(-4)}`
-      : `${user.email?.slice(0, 1) ?? ""}•••@${user.email?.split("@")[1] ?? "your account"}`;
+    const account = user.email
+      ? `${user.email.slice(0, 1)}•••@${user.email.split("@")[1] ?? "your account"}`
+      : "your existing account";
     return (
       <AuthPage
         title="Choose your account"
@@ -35,7 +35,7 @@ export default async function SignupPage({
   return (
     <AuthPage
       title="Create your account"
-      description="Verify your phone to start with $10,000 in virtual cash."
+      description="Verify your email to start with $10,000 in virtual cash."
     >
       <SignUpForm nextPath={next} />
       <Link

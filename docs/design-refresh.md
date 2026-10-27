@@ -58,7 +58,7 @@ This is a presentation update. Authentication APIs, access-token verification, F
 
 Live data availability is distinct from the design. An empty discovery catalog stays empty, missing publications are labeled, and missing/current-cost fallback holdings remain explainable. Populated browser validation uses an isolated local database with dedicated accounts, clearly synthetic observations and execution disabled; fixtures never enter the connected application database.
 
-Hosted migrations, API environment variables, SMS-provider setup, real carrier verification, dependable ingestion and a separate decision to activate paper execution remain launch dependencies. This redesign does not establish their completion.
+Hosted migrations, API environment variables, production SMTP and real email-delivery verification, dependable ingestion and a separate decision to activate paper execution remain launch dependencies. This redesign does not establish their completion.
 
 ## Dependency audit follow-up
 

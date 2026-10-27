@@ -106,12 +106,12 @@ jobs:
       - run: pip install -r requirements.txt
       - run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
-      - name: Prepare isolated phone auth fixtures
+      - name: Prepare isolated email auth fixtures
         run: python -m scripts.auth_flow_checks prepare
       - name: Start isolated API
         run: python -m scripts.auth_flow_checks api > /tmp/artiste-auth-api.log 2>&1 &
       - name: Check onboarding and account entry
-        run: python -m scripts.auth_flow_checks browser --project=public-phone --project=public-webkit-phone --workers=2
+        run: python -m scripts.auth_flow_checks browser --project=public-mobile --project=public-webkit-mobile --workers=2
       - name: Stop isolated auth stack
         if: always()
         run: python -m scripts.auth_flow_checks stop

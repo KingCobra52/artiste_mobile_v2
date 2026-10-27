@@ -11,8 +11,8 @@ publish to live quote anchors while preserving the current price at cutover.
 
 1. Back up the database and replay committed migrations in a staging project. Do not change hosted tables manually as a substitute for migrations.
 2. Configure FastAPI with its server-only Supabase URL and secret key. Configure Next.js with `ARTISTE_API_URL`, public Supabase URL/key and `NEXT_PUBLIC_SITE_URL`. Never put an administrative key in a `NEXT_PUBLIC_` variable.
-3. Configure phone Auth in the hosted Supabase dashboard: enable phone signup/confirmation, select Twilio, supply the account SID, message service SID/sender and Auth token. Restrict permitted destinations and apply provider spending limits. Match the 60-second resend interval, six-digit code and server-side SMS rate limits in `supabase/config.toml`. Retain email login and password recovery, site URL and callback allowlist for existing accounts. Account UUIDs and holdings are preserved when adding a verified phone.
-4. Verify real SMS signup, resend, delivery errors, login, password recovery and existing-account phone attachment in staging. Local unit tests validate SDK calls and error handling; they cannot prove carrier delivery. No SMS credentials are committed or configured by this change.
+3. Configure email Auth in the hosted Supabase dashboard: enable email signup and confirmation, configure production SMTP, set the site URL and allow the signup, recovery and callback URLs used by the deployed frontend. Keep phone signup and phone MFA disabled if the hosted project supports those settings. Do not change account identities or hosted Auth settings as part of this code change.
+4. Verify real email signup, confirmation resend, delivery errors, login, password recovery and reset in staging. Local unit tests validate SDK calls and error handling; they cannot prove delivery through the production mail provider. No SMTP credentials are committed or configured by this change.
 5. Run ingestion against the migrated staging project. Confirm that both sources publish valid anchors and ingestion reports are stored. Verify that the curated artists have fresh published quotes before inviting users.
 6. Confirm fresh quotes, transition continuity, and provenance in the intended environment. Trade execution is an independent gate: leave `pricing_controls.enabled = false` until the trade, concurrency, rounding, and pricing checks pass, then enable it only for the intended paper-trading environment. The local fixture helper enables it only in the disposable localhost database.
 
@@ -47,33 +47,31 @@ The fixture helper refuses hosted URLs. It creates two dedicated local accounts,
 
 Frontend checks run from `frontend/`: `npm run test:unit`, `npm run typecheck`, `npm run lint`, `npm run build`, `npm run test:e2e:config`. Configured browser projects cover Chromium/WebKit phones and 360, 390, 430, 768 and 1280px layouts. CI also runs the disposable local integration suite. Dedicated SQL checks use PGlite to replay every migration and test real PostgreSQL transactions without a hosted database.
 
-Supabase reference documentation: [phone/password authentication](https://supabase.com/docs/guides/auth/passwords), [SMS OTP without account creation](https://supabase.com/docs/reference/javascript/auth-signinwithotp), [OTP verification](https://supabase.com/docs/reference/javascript/auth-verifyotp), [verification resend](https://supabase.com/docs/reference/javascript/auth-resend), and [verified-session password update](https://supabase.com/docs/reference/javascript/auth-updateuser). SMS recovery deliberately composes these APIs; it does not call the email-reset endpoint.
+Supabase reference documentation: [email and password authentication](https://supabase.com/docs/guides/auth/passwords), [email templates and SMTP](https://supabase.com/docs/guides/auth/auth-email-templates), [password recovery](https://supabase.com/docs/guides/auth/passwords#resetting-a-password), and [Auth redirect URLs](https://supabase.com/docs/guides/auth/redirect-urls).
 
 ## Validation recorded for this change
 
 - 120 Python unit/service/pipeline checks; three additional live local API checks cover execution retries, account isolation, concurrent orders and onboarding ownership.
-- 25 frontend unit checks, including SMS SDK contracts, redirect normalization and deterministic Eastern timestamps across daylight-saving changes.
+- Frontend unit and browser checks cover email Auth SDK contracts, redirect normalization and deterministic Eastern timestamps across daylight-saving changes.
 - 25 Chromium/WebKit production-build journey checks, covering phones, tablet/desktop widths, touch/keyboard charts and interrupted form submissions; five missing-configuration checks.
 - All migrations replayed in local Supabase and embedded PostgreSQL; transaction checks cover cost basis, shadow gating, rollback, purchase-cost fallback and recording quote changes for other holders.
 - Frontend typecheck, lint and production webpack build, Python Ruff and diff whitespace checks passed.
 
-Real carrier SMS delivery, hosted migration application and hosted deployment remain operator tasks. Timing checks used the small local three-artist fixture and are not a production load test. Browser runtime assertions narrowly exclude WebKit's documented same-origin RSC cancellation diagnostic during document replacement ([upstream issue](https://github.com/microsoft/playwright/issues/43120)); hydration failures and other runtime errors still fail the suite.
+Real email delivery through the production provider, hosted migration application and hosted deployment remain operator tasks. Timing checks used the small local three-artist fixture and are not a production load test. Browser runtime assertions narrowly exclude WebKit's documented same-origin RSC cancellation diagnostic during document replacement ([upstream issue](https://github.com/microsoft/playwright/issues/43120)); hydration failures and other runtime errors still fail the suite.
 
-### Isolated onboarding and phone sign-up checks
+### Isolated onboarding and email sign-up checks
 
 Use `python -m scripts.auth_flow_checks prepare` to create a separate local
 Supabase project on ports 55320–55329. It copies the versioned migrations and
-seed, enables phone sign-up and confirmation only in its temporary config, and
-uses fixed OTP `123456` for reserved test numbers `+12025550191` and
-`+12025550192`. It does not enable paper execution or modify the existing local
-project. Preparation deletes only these two phone fixtures in the isolated
-project so the sign-up checks can run again. The SMS provider uses placeholder
-credentials; mapped test numbers skip SMS delivery.
+seed, enables email confirmation only in its temporary config, and captures
+confirmation and recovery messages in the local Mailpit inbox. It does not enable
+paper execution or modify the existing local project. The fixture account is
+created only in the isolated project.
 
 Start `python -m scripts.auth_flow_checks api` in another terminal. Then run:
 
 ```bash
-python -m scripts.auth_flow_checks browser --project=public-phone --project=public-webkit-phone --workers=2
+python -m scripts.auth_flow_checks browser --project=public-mobile --project=public-webkit-mobile --workers=2
 ```
 
 The helper passes only public configuration and dedicated test credentials to
@@ -89,14 +87,13 @@ through FastAPI before opening the intended destination. Failed saves offer Retr
 Switching accounts signs out only the current session and clears anonymous
 progress. Replaying onboarding does not reset completed account progress.
 
-Fixed OTP tests do not establish carrier delivery. Before a hosted rollout,
-verify phone sign-up and confirmation are enabled, configure the SMS provider,
-and test sign-up, resend, expired/wrong codes, and successful verification on a
-real phone in staging. Follow the official [phone-auth setup](https://supabase.com/docs/guides/auth/phone-login).
+Local Mailpit tests do not establish production email delivery. Before a hosted
+rollout, configure SMTP and callback URLs, then test signup, confirmation resend,
+login and recovery through the real provider in staging.
 
 Validation for the onboarding handoff fix: 51 frontend unit checks, 38 public
 Chromium/WebKit flow checks, four signed-in onboarding regressions, dedicated
 account sign-in setup, and five missing-configuration checks passed. Frontend
 typecheck, lint, production webpack build, Python Ruff for the test helper, and
-diff whitespace checks passed. Phone sign-up used the isolated fixed-OTP stack;
-real carrier delivery and hosted configuration remain unverified.
+diff whitespace checks passed. Auth flows used isolated local email delivery;
+production email delivery and hosted configuration remain unverified.
