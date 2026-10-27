@@ -333,7 +333,14 @@ def test_shadow_schema_failure_does_not_block_live_anchor_publication(capsys):
     assert "Shadow pricing publication unavailable (RuntimeError)." in capsys.readouterr().out
 
 
-def test_fresh_confident_shadow_index_publishes_performance_anchor():
+def test_fresh_confident_shadow_index_publishes_performance_anchor(monkeypatch):
+    # Keep the fixed fixture dates inside the 48-hour freshness window even
+    # when CI runs on a later date.
+    monkeypatch.setattr(
+        "backend.app.services.shadow_pricing.utc_now", lambda now=None: NOW
+    )
+    monkeypatch.setattr("pipelines.portfolio_snapshots.utc_now", lambda now=None: NOW)
+
     live_rows = [
         {
             "artist_id": 7,
